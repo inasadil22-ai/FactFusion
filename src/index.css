@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Use Inter font as declared in your components */
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  
+  /* Improves font rendering on macOS/iOS */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Optional: Configure scroll behavior for smoother page transitions */
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  /* Matches your dark theme */
+  background-color: #050505; /* Set to a slightly softer black for components */
+  
+  /* Use min-width instead of fixed width to prevent unwanted horizontal scroll bars */
+  min-width: 100%;
+  min-height: 100vh;
+  /* Allow normal scroll behavior */
+  overflow-x: hidden; 
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
