@@ -87,9 +87,9 @@ const Footer = () => {
 
         {/* --- Bottom Bar --- */}
         <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-blue-100/20">
-          <p>© 2025 FactFusion • FYP Submission</p>
+          <p>© 2026 FactFusion </p>
           <div className="flex items-center gap-2">
-            Developed for <span className="text-blue-500/60">Academic Excellence</span>
+            Developed for <span className="text-blue-500/60">Szabist</span>
           </div>
         </div>
       </div>
