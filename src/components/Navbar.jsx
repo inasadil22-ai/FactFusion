@@ -1,126 +1,124 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut } from 'lucide-react';
-import logo from '../assets/images/logo_000.png'; 
+import { LayoutDashboard, LogOut, Shield } from 'lucide-react';
+import logo from '../assets/images/logo_00.png'; 
 
 const Navbar = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
 
-  // --- 1. Check login status ---
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      setUser(storedUser ? JSON.parse(storedUser) : null);
-    } catch (error) {
-      console.error("Error parsing user data from localStorage:", error);
-      setUser(null);
-    }
-  }, [location.pathname]); // Re-run when navigation happens
+  // Sync user state with localStorage on every route change
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      setUser(storedUser ? JSON.parse(storedUser) : null);
+    } catch (error) {
+      console.error("Auth sync error:", error);
+      setUser(null);
+    }
+  }, [location.pathname]);
 
-  // --- LOGOUT HANDLER (Added) ---
-  const handleLogout = () => {
-    localStorage.removeItem('user'); // Clear the session
-    setUser(null); // Update local state
-    navigate('/', { replace: true }); // Redirect to home page
-  };
-  // -------------------------------
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    setUser(null);
+    navigate('/', { replace: true });
+  };
 
-  // Define ALL navigation links (Updated paths/names to match project)
-  const ALL_NAV_OPTIONS = useMemo(() => ([
-    { name: 'Home', path: '/', protected: false },
-    { name: 'Detection', path: '/detection', protected: true },
-    { name: 'XAI Insights', path: '/xai', protected: true }, // Corrected path from App.js
-    { name: 'Analysis History', path: '/analysis-history', protected: true },
-    { name: 'About', path: '/about', protected: false },
-  ]), []);
+  // Define navigation options based on your file structure
+  const ALL_NAV_OPTIONS = useMemo(() => ([
+    { name: 'Home', path: '/', protected: false },
+    { name: 'Detection', path: '/detection', protected: true },
+    { name: 'XAI Insights', path: '/xai', protected: true }, 
+    { name: 'Analysis History', path: '/analysis-history', protected: true },
+    { name: 'About', path: '/about', protected: false },
+  ]), []);
 
-  // Filter the links based on the user's login status
-  const visibleNavOptions = ALL_NAV_OPTIONS.filter(option => 
-    !option.protected || user
-  );
+  // Filter links: Only show protected links if the user is logged in
+  const visibleNavOptions = ALL_NAV_OPTIONS.filter(option => 
+    !option.protected || user
+  );
 
-  // Determine dashboard link based on role
-  const getDashboardLink = () => {
-    if (!user) return '/login'; 
-    return user.role === 'admin' ? '/admin-dashboard' : '/team-dashboard';
-  };
+  // Logic to determine which dashboard to show based on user role
+  const getDashboardLink = () => {
+    if (!user) return '/login'; 
+    return user.role === 'admin' ? '/admin-dashboard' : '/team-dashboard';
+  };
 
-  return (
-    <nav className="w-full fixed top-0 z-50 backdrop-blur-md bg-black/40 border-b border-white/5">
-      <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        
-        {/* --- Logo Section (Updated Branding/Colors) --- */}
-        <div className="flex items-center gap-3 group">
-          <div className="relative w-10 h-10 overflow-hidden">
-            <img 
-              src={logo} 
-              alt="FactFusion Logo" 
-              className="w-full h-full object-cover" 
-            />
-          </div>
-          <span className="text-white font-bold text-2xl tracking-tight hidden sm:block">
-            Fact<span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400">Fusion</span>
-          </span>
-        </div>
+  return (
+    <nav className="w-full fixed top-0 z-50 backdrop-blur-xl bg-[#020617]/70 border-b border-blue-500/10">
+      <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
+        
+        {/* --- Logo Branding --- */}
+        <div className="flex items-center gap-3 group">
+          <div className="relative w-16 h-16 flex items-center justify-center">
+            <img 
+              src={logo} 
+              alt="FactFusion Logo" 
+              className="w-full h-full object-contain transform group-hover:scale-110 transition-transform duration-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.3)] group-hover:drop-shadow-[0_0_15px_rgba(59,130,246,0.6)]" 
+            />
+          </div>
+          <span className="text-white font-bold text-4xl tracking-tight hidden sm:block">
+            Fact<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Fusion</span>
+          </span>
+        </div>
 
-        {/* Center Links (Updated Hover Color) */}
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
-          {visibleNavOptions.map((option) => ( 
-            <Link 
-              key={option.name}
-              to={option.path} 
-              className={`hover:text-red-400 transition-colors ${ // Changed hover color to red
-                location.pathname.startsWith(option.path) && option.path !== '/'
-                  ? 'text-white font-semibold' 
-                  : location.pathname === '/' && option.path === '/' 
-                  ? 'text-white font-semibold' 
-                  : ''
-              }`}
-            >
-              {option.name}
-            </Link>
-          ))}
-        </div>
+        {/* --- Central Navigation Links --- */}
+        <div className="hidden md:flex items-center gap-8 text-md font-medium text-blue-100/50">
+          {visibleNavOptions.map((option) => ( 
+            <Link 
+              key={option.name}
+              to={option.path} 
+              className={`hover:text-blue-400 transition-all duration-300 relative group ${
+                location.pathname === option.path ? 'text-white font-semibold' : ''
+              }`}
+            >
+              {option.name}
+              <span className={`absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 ${
+                location.pathname === option.path ? 'w-full' : 'w-0 group-hover:w-full'
+              }`} />
+            </Link>
+          ))}
+        </div>
 
-        {/* --- Right Side: Dynamic Buttons (Updated) --- */}
-        <div className="flex items-center gap-4">
-          <span className="hidden lg:block text-red-500/80 font-mono text-sm">FINAL YEAR PROJECT</span> {/* Updated Date/Text */}
-          
-          {user ? (
-            <div className="flex items-center gap-4">
-              {/* 1. My Dashboard Button (Updated Colors) */}
-              <Link 
-                to={getDashboardLink()}
-                className="hidden md:flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-red-900/20 transition-all transform hover:scale-105"
-              >
-                <LayoutDashboard size={16} />
-                <span className="hidden sm:inline">My Dashboard</span>
-              </Link>
+        {/* --- Right Side: Dashboard & Auth --- */}
+        <div className="flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-500/5 border border-blue-500/10">
+            <Shield className="w-4 h-4 text-blue-500" />
+            <span className="text-blue-400/80 font-mono text-[10px] tracking-widest uppercase">FYP 2025</span>
+          </div>
+          
+          {user ? (
+            <div className="flex items-center gap-3">
+              {/* This Button dynamically redirects based on role */}
+              <Link 
+                to={getDashboardLink()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-blue-900/40 transition-all transform hover:scale-105 active:scale-95"
+              >
+                <LayoutDashboard size={16} />
+                <span>Dashboard</span>
+              </Link>
 
-              {/* 2. Logout Button (Added) */}
-              <button 
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 rounded-full border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-all text-sm font-semibold"
-              >
-                <LogOut size={16} />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
-            </div>
-          ) : (
-            /* Sign In Button (Updated Colors) */
-            <Link 
-              to="/login"
-              className="px-5 py-2 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all text-sm font-semibold"
-            >
-              Sign In
-            </Link>
-          )}
-        </div>
-      </div>
-    </nav>
-  );
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-blue-500/20 text-blue-100/60 hover:text-white hover:bg-white/5 transition-all text-sm font-semibold"
+                title="Logout"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <Link 
+              to="/login"
+              className="px-6 py-2.5 rounded-full bg-white/5 border border-blue-500/30 text-blue-100 hover:bg-blue-500/10 transition-all text-sm font-bold"
+            >
+              Sign In
+            </Link>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
 };
 
 export default Navbar;

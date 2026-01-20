@@ -3,34 +3,21 @@
 @tailwind utilities;
 
 :root {
-  /* Use Inter font as declared in your components */
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  
-  /* Improves font rendering on macOS/iOS */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  
-  /* Optional: Configure scroll behavior for smoother page transitions */
+  font-family: Inter, system-ui, sans-serif;
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   padding: 0;
-  /* Matches your dark theme */
-  background-color: #050505; /* Set to a slightly softer black for components */
-  
-  /* Use min-width instead of fixed width to prevent unwanted horizontal scroll bars */
-  min-width: 100%;
-  min-height: 100vh;
-  /* Allow normal scroll behavior */
+  background-color: #020617;
   overflow-x: hidden; 
 }
 
+/* Ensure React root is a flex container as tall as the screen */
 #root {
   width: 100%;
-  min-height: 100vh;
-  margin: 0;
-  padding: 0;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; 
 }

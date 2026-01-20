@@ -1,246 +1,224 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-// NEW: Import Firebase functions
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase'; // Import auth from your new file
-
-// Updated icons for the Misinformation theme, including the new logo components
-import { Code2, Eye, MessageSquare, Cpu, Lock as LockIcon, User, ArrowLeft, GanttChartSquare } from 'lucide-react'; 
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios'; 
+import CryptoJS from 'crypto-js'; 
+import { 
+  Lock as LockIcon, 
+  User, 
+  ArrowRight, 
+  ShieldCheck, 
+  AlertCircle,
+  FileText,
+  Cpu,
+  Bot
+} from 'lucide-react'; 
 
 const Login = () => {
-  const navigate = useNavigate();
-  // Renamed state to reflect Firebase's use of email as primary identifier
-  const [emailOrUsername, setEmailOrUsername] = useState(''); 
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const [isLogin, setIsLogin] = useState(true); 
+  const [email, setEmail] = useState(''); 
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Updated Background Icons (Focus on AI/Detection/Security)
-  const backgroundIcons = [
-    // Code (Red/Cyan)
-    { Icon: Code2, x: "10%", y: "20%", delay: 0, color: "text-red-500/20" }, 
-    // Eye (Detection/Vision - Pink/Red)
-    { Icon: Eye, x: "85%", y: "15%", delay: 2, color: "text-pink-500/20" }, 
-    // Message (Text Modality - Purple/Cyan)
-    { Icon: MessageSquare, x: "15%", y: "75%", delay: 4, color: "text-purple-500/20" }, 
-    // CPU (AI Processing - Red/Pink)
-    { Icon: Cpu, x: "80%", y: "60%", delay: 1, color: "text-cyan-500/20" }, 
-  ];
+  const backgroundIcons = [
+    { Icon: FileText, x: "10%", y: "20%", delay: 0, color: "text-blue-500/10" },
+    { Icon: Bot, x: "85%", y: "15%", delay: 2, color: "text-indigo-500/10" },
+    { Icon: Cpu, x: "15%", y: "75%", delay: 4, color: "text-cyan-500/10" },
+    { Icon: ShieldCheck, x: "80%", y: "60%", delay: 1, color: "text-blue-400/10" },
+  ];
 
+  useEffect(() => {
+    setError('');
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+  }, [isLogin]);
 
-// CORRECTED handleLogin FUNCTION (Firebase Integration)
-const handleLogin = async (e) => {
-  e.preventDefault();
-  setError('');
-  setIsLoading(true);
+  const validateForm = () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !password) {
+      setError("Credentials required for uplink.");
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setError("Invalid identity format.");
+      return false;
+    }
+    if (password.length < 6) {
+      setError("Access key must be at least 6 characters.");
+      return false;
+    }
+    if (!isLogin && password !== confirmPassword) {
+      setError("Security keys do not match.");
+      return false;
+    }
+    return true;
+  };
 
-  try {
-    // STEP 1: Authenticate with Firebase
-    const userCredential = await signInWithEmailAndPassword(
-      auth,
-      emailOrUsername, // Passed as email
-      password
-    );
-    const user = userCredential.user;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!validateForm()) return;
+    setIsLoading(true);
 
-    // Get the secure token for the Flask backend
-    const idToken = await user.getIdToken();
+    try {
+      const passwordHash = CryptoJS.SHA256(password).toString();
+      const endpoint = isLogin ? '/api/login' : '/api/signup';
+      
+      // SYNC WITH SERVER: Signup uses 'password_hash'
+      const payload = isLogin 
+        ? { email, password: passwordHash } 
+        : { email, password_hash: passwordHash, role: 'standard' };
 
-    // STEP 2: Call Flask to get the Role/Profile (Secure Token Exchange)
-    const profileResponse = await fetch('http://localhost:5000/api/profile', {
-      method: 'GET',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}` 
-      },
-    });
+      const response = await axios.post(`http://localhost:5000${endpoint}`, payload);
+      
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('accessToken', response.data.token || 'SESSION_ACTIVE'); 
+      
+      // Redirecting to home/hero
+      navigate('/');
+    } catch (err) {
+      setError(err.response?.data?.error || "Connection failure: Database offline.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const data = await profileResponse.json();
+  return (
+    /* LAYOUT FIX: We use flex-grow so this fills the space in App.jsx.
+       Removed fixed 'min-h-screen' to prevent the footer from jumping.
+    */
+    <div className="flex-grow flex flex-col items-center justify-center w-full relative overflow-hidden py-16 px-4">
+      
+      {/* Ambience Layer */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(30,64,175,0.15),transparent_70%)] pointer-events-none" />
+      
+      {backgroundIcons.map(({ Icon, x, y, delay, color }, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, y: [0, -30, 0], rotate: [0, 10, -10, 0] }}
+          transition={{ duration: 8, delay, repeat: Infinity, ease: "easeInOut" }}
+          className={`absolute pointer-events-none ${color}`}
+          style={{ left: x, top: y }}
+        >
+          <Icon size={60} strokeWidth={1} />
+        </motion.div>
+      ))}
 
-    if (profileResponse.ok) {
-      localStorage.setItem('user', JSON.stringify(data));
-      localStorage.setItem('idToken', idToken);
-      
-      if (data.role === 'admin') {
-        navigate('/admin-dashboard');
-      } else {
-        navigate('/team-dashboard');
-      }
-    } else {
-      setError(data.error || 'Login verification failed. Check Flask server logs.');
-    }
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 w-full max-w-md"
+      >
+        <div className="bg-white/[0.03] backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 md:p-10 shadow-2xl shadow-blue-900/30">
+          
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-2">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500">
+                Portal Access
+              </span>
+            </h2>
+            <div className="flex items-center justify-center gap-2 opacity-40">
+              <ShieldCheck size={14} className="text-blue-400" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em]">Secure Verification</p>
+            </div>
+          </div>
 
-  } catch (firebaseError) {
-    console.error(firebaseError);
-    if (firebaseError.code === 'auth/wrong-password' || firebaseError.code === 'auth/user-not-found') {
-      setError('Invalid credentials.');
-    } else if (firebaseError.code === 'auth/network-request-failed') {
-      setError('Check your internet connection.');
-    } else {
-      setError('Authentication error. Check console for details.');
-    }
-  } finally {
-    setIsLoading(false);
-  }
-};
+          {/* Mode Switcher */}
+          <div className="flex mb-8 bg-blue-950/40 rounded-2xl p-1.5 border border-blue-500/10">
+            <button
+              onClick={() => setIsLogin(true)}
+              type="button"
+              className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${isLogin ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40' : 'text-blue-100/30 hover:text-white'}`}
+            >
+              LOGIN
+            </button>
+            <button
+              onClick={() => setIsLogin(false)}
+              type="button"
+              className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${!isLogin ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40' : 'text-blue-100/30 hover:text-white'}`}
+            >
+              SIGN UP
+            </button>
+          </div>
 
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest ml-1 block">Identity</label>
+              <div className="relative group">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500/30 group-focus-within:text-blue-400 transition-colors" size={18} />
+                <input 
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-blue-500/50 outline-none transition-all text-sm placeholder:text-white/10"
+                  placeholder="operator@system.ai"
+                />
+              </div>
+            </div>
 
-  return (
-    <div className="w-full min-h-screen bg-[#050505] text-white flex items-center justify-center relative overflow-hidden">
-      {/* Background Images (Kept dark aesthetic) */}
-       <div 
-        className="absolute inset-0 z-0 opacity-20 mix-blend-overlay pointer-events-none"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1544377987-920f69d7b43a?q=80&w=2670&auto=format&fit=crop')`, // New abstract/tech image
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      />
-      <div 
-        className="absolute inset-0 z-0 opacity-100 mix-blend-soft-light pointer-events-none blur-[2px]"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1596495578051-689e223d6a5d?q=80&w=2670&auto=format&fit=crop')`, // New abstract data/network image
-          backgroundSize: 'cover',
-          backgroundPosition: 'bottom',
-        }}
-      />
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest ml-1 block">Access Key</label>
+              <div className="relative group">
+                <LockIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500/30 group-focus-within:text-blue-400 transition-colors" size={18} />
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-blue-500/50 outline-none transition-all text-sm placeholder:text-white/10"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
 
-      {/* Floating Icons */}
-      {backgroundIcons.map((item, index) => (
-        <motion.div
-          key={`icon-${index}`}
-          className={`absolute z-0 ${item.color} pointer-events-none`}
-          style={{ left: item.x, top: item.y }}
-          animate={{ y: [0, -20, 0], rotate: [0, 5, -5, 0] }}
-          transition={{ duration: 6, repeat: Infinity, delay: item.delay, ease: "easeInOut" }}
-        >
-          <item.Icon size={64} strokeWidth={1.5} />
-        </motion.div>
-      ))}
+            <AnimatePresence mode="wait">
+              {!isLogin && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }} 
+                  animate={{ opacity: 1, height: 'auto' }} 
+                  exit={{ opacity: 0, height: 0 }} 
+                  className="space-y-2 overflow-hidden"
+                >
+                  <label className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest ml-1 block">Confirm Key</label>
+                  <div className="relative group">
+                    <LockIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500/30 group-focus-within:text-blue-400 transition-colors" size={18} />
+                    <input 
+                      type="password" 
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-blue-500/50 outline-none transition-all text-sm"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-      {/* Central Glow behind the card */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-red-600/10 rounded-full blur-[100px] pointer-events-none z-0" />
+            {error && (
+              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3 text-red-400 text-[10px] font-bold bg-red-500/10 p-4 rounded-2xl border border-red-500/20 uppercase tracking-widest">
+                <AlertCircle size={16} /> {error}
+              </motion.div>
+            )}
 
-      {/* =======================
-          LOGIN CARD 
-         ======================= */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative z-10 w-full max-w-md p-1"
-      >
-        {/* Card Border Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent rounded-3xl blur-sm" />
-        
-        {/* Card Shadow */}
-        <div className="relative bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-red-900/20">
-          
-          {/* Header */}
-          <div className="text-center mb-8">
-            <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-6 group">
-              <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-              Back to FactFusion Home
-            </Link>
-            
-            {/* >>>>>>>>>>> THE ENHANCED LOGO COMPONENT <<<<<<<<<<< */}
-            <div className="flex justify-center mb-4">
-               <div className="p-3 bg-gradient-to-br from-red-600/30 to-pink-600/30 rounded-2xl border border-red-500/50 relative">
-                  {/* Base Icon: Code (Data) - Stronger Red */}
-                  <Code2 className="w-8 h-8 text-red-300" /> 
-                  {/* Overlaid Icon: GanttChart (Fusion/Structure) - Brighter Pink */}
-                  <GanttChartSquare className="w-5 h-5 text-pink-400 absolute -bottom-1 -right-1 p-0.5 bg-gray-900 rounded-md border border-red-500" />
-               </div>
-            </div>
-            {/* >>>>>>>>>>> END LOGO COMPONENT <<<<<<<<<<< */}
-
-            <h2 className="text-3xl font-black tracking-tight mb-2">
-              {/* Title gradient updated to Red/Pink */}
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-pink-400 to-purple-400">
-                Project Access Portal
-              </span>
-            </h2>
-            <p className="text-gray-400 text-sm">Enter your assigned credentials to access FactFusion.</p>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-5">
-            
-            {/* Username (Focus color updated) */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1">Username (Email)</label>
-              <div className="relative group">
-                <User className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-red-400 transition-colors w-5 h-5" />
-                <input 
-                  type="text" 
-                  value={emailOrUsername}
-                  onChange={(e) => setEmailOrUsername(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:bg-white/10 transition-all"
-                  placeholder="Enter your email"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Password (Focus color updated) */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1">Password</label>
-              <div className="relative group">
-                <LockIcon className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-red-400 transition-colors w-5 h-5" />
-                <input 
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:bg-white/10 transition-all"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Error Message (Color kept Red) */}
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="text-red-400 text-xs text-center bg-red-500/10 py-2 rounded-lg border border-red-500/20"
-              >
-                {error}
-              </motion.div>
-            )}
-
-            {/* Submit Button (Gradient updated to Red/Pink) */}
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={isLoading}
-              className={`w-full py-4 rounded-xl font-bold text-white shadow-lg shadow-red-900/20 relative overflow-hidden group ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
-            >
-              {/* Background gradient updated to Red/Pink */}
-              <div className="absolute inset-0 bg-gradient-to-r from-red-600 to-pink-600 transition-transform duration-300" />
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
-              <span className="relative flex items-center justify-center gap-2">
-                 {isLoading ? 'Verifying...' : 'Access System'}
-                 {!isLoading && <ArrowLeft className="w-4 h-4 rotate-180" />}
-              </span>
-            </motion.button>
-
-          </form>
-
-          {/* Footer Text (Branding updated) */}
-          <div className="mt-8 text-center">
-             <p className="text-xs text-gray-600">
-               Protected by <span className="text-red-500/60">FactFusion SecureAuth</span>. <br /> 
-               Issues? Contact support or system administrators.
-             </p>
-          </div>
-
-        </div>
-      </motion.div>
-
-    </div>
-  );
+            <button 
+              type="submit"
+              disabled={isLoading}
+              className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-[0.3em] text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:shadow-[0_0_30px_rgba(37,99,235,0.4)] transition-all active:scale-[0.98] ${isLoading ? 'opacity-50 cursor-wait' : ''}`}
+            >
+              <span className="flex items-center justify-center gap-2">
+                {isLoading ? 'Processing...' : (isLogin ? 'Authorize Access' : 'Secure Registration')}
+                {!isLoading && <ArrowRight size={16} />}
+              </span>
+            </button>
+          </form>
+        </div>
+      </motion.div>
+    </div>
+  );
 };
 
 export default Login;

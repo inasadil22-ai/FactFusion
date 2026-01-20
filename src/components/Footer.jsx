@@ -1,74 +1,100 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import logo from '../assets/images/logo_000.png';
-import { Github, Twitter, Linkedin, Heart } from 'lucide-react';
+import logo from '../assets/images/logo_00.png';
+import { Shield, Database, Code2, Server, GraduationCap } from 'lucide-react';
 
 const Footer = () => {
-  return (
-    <footer className="w-full bg-black border-t border-white/10 pt-16 pb-8 relative overflow-hidden">
-      
-      {/* Glow adjusted to project colors (Red/Purple) */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-red-900/20 rounded-full blur-[120px] pointer-events-none" />
+  return (
+    <footer className="w-full bg-[#020617] border-t border-blue-500/10 pt-16 pb-8 relative overflow-hidden font-sans">
+      
+      {/* --- Ambient Glows --- */}
+      <div className="absolute top-0 left-1/4 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-purple-600/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-          
-          {/* Column 1: Brand (Updated) */}
-          <div className="col-span-1 md:col-span-2">
-             <Link to="/" className="flex items-center gap-3 group">
-                      {/* Logo glow updated to reflect the detection theme colors */}
-                      <div className="relative w-10 h-10 overflow-hidden rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.5)] group-hover:shadow-[0_0_25px_rgba(239,68,68,0.8)] transition-all duration-300">
-                        <img 
-                          src={logo} 
-                          alt="FactFusion Logo" 
-                          className="w-full h-full object-cover" 
-                        />
-                      </div>
-                      
-                      <span className="text-white font-bold text-2xl tracking-tight">
-                        Fact<span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400">Fusion</span> {/* Updated Brand Name */}
-                      </span>
-                    </Link>
-                    <br />
-            <p className="text-gray-400 max-w-sm leading-relaxed">
-              Utilizing **Multimodal AI** to fuse **Text and Image** data for accurate misinformation detection, enhanced by transparent **Explainable AI (XAI)** insights.
-            </p>
-          </div>
+      <div className="relative z-10 max-w-7xl mx-auto px-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+          
+          {/* --- Column 1: Project Identity --- */}
+          <div className="col-span-1 md:col-span-2">
+            <div className="flex items-center gap-3 group cursor-default">
+              <div className="relative w-12 h-12 flex items-center justify-center transition-all duration-500">
+                <img 
+                  src={logo} 
+                  alt="FactFusion Logo" 
+                  className="w-full h-full object-contain transform group-hover:scale-110 transition-transform duration-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.3)] group-hover:drop-shadow-[0_0_15px_rgba(59,130,246,0.6)]" 
+                />
+              </div>
+              
+              <div className="flex flex-col">
+                <span className="text-white font-bold text-2xl tracking-tight leading-none">
+                  Fact<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Fusion</span>
+                </span>
+                <span className="text-[10px] text-blue-400/50 font-mono tracking-[0.2em] mt-1 uppercase">AI-Powered Verification</span>
+              </div>
+            </div>
 
-          {/* Column 2: Quick Links (Updated to Project Features) */}
-          <div>
-            <h4 className="text-white font-bold mb-6">Features</h4>
-            <ul className="space-y-4 text-gray-400">
-              <li><Link to="/detection" className="hover:text-red-400 transition-colors">Multimodal Detection</Link></li>
-              <li><Link to="/xai" className="hover:text-red-400 transition-colors">XAI Insights</Link></li>
-              <li><Link to="/analysis-history" className="hover:text-red-400 transition-colors">Analysis History</Link></li>
-            </ul>
-          </div>
+            <p className="mt-6 text-blue-100/40 max-w-sm leading-relaxed text-sm">
+              A Final Year Project focused on <span className="text-blue-400 font-medium">Multimodal Misinformation Detection</span>. 
+              Utilizing Explainable AI (XAI) to bridge the gap between complex neural networks and user trust.
+            </p>
+          </div>
 
-          {/* Column 3: Connect (Hover colors updated) */}
-          <div>
-            <h4 className="text-white font-bold mb-6">Connect</h4>
-            <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/50 transition-all">
-                <Github size={18} />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all">
-                <Twitter size={18} />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-purple-600/20 hover:border-purple-600/50 transition-all">
-                <Linkedin size={18} />
-              </a>
-            </div>
-          </div>
-        </div>
+          {/* --- Column 2: Navigation --- */}
+          <div>
+            <h4 className="text-white font-bold mb-6 flex items-center gap-2 text-sm uppercase tracking-widest">
+              <Shield className="w-4 h-4 text-blue-500" />
+              Sitemap
+            </h4>
+            <ul className="space-y-4 text-blue-100/40 text-sm font-medium">
+              <li><Link to="/detection" className="hover:text-blue-400 transition-all duration-300">Detection Engine</Link></li>
+              <li><Link to="/xai" className="hover:text-purple-400 transition-all duration-300">Explainability Hub</Link></li>
+              <li><Link to="/about" className="hover:text-blue-400 transition-all duration-300">Project Thesis</Link></li>
+            </ul>
+          </div>
 
-        {/* Bottom Bar (Copyright updated) */}
-        <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-content-center items-center gap-4 text-sm text-gray-500">
-          <p>© 2025 FactFusion. Multimodal Misinformation Detection using XAI.</p>
-        </div>
-      </div>
-    </footer>
-  );
+          {/* --- Column 3: Technical Stack (FYP Focus) --- */}
+          <div>
+            <h4 className="text-white font-bold mb-6 text-sm uppercase tracking-widest flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-indigo-400" />
+              Project Info
+            </h4>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 text-[11px] text-blue-100/40 font-mono">
+                <Code2 size={14} className="text-blue-500" />
+                <span>React / Tailwind CSS</span>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-blue-100/40 font-mono">
+                <Database size={14} className="text-blue-500" />
+                <span>Python / PyTorch / XAI</span>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-blue-100/40 font-mono">
+                <Server size={14} className="text-blue-500" />
+                <span>Node.js / MongoDB</span>
+              </div>
+              
+              <div className="pt-2">
+                <div className="flex justify-between text-[9px] text-blue-400/60 uppercase mb-1 font-bold">
+                  <span>Development Phase</span>
+                  <span>60%</span>
+                </div>
+                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                  <div className="w-[60%] h-full bg-gradient-to-r from-blue-600 to-indigo-500" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* --- Bottom Bar --- */}
+        <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-blue-100/20">
+          <p>© 2025 FactFusion • FYP Submission</p>
+          <div className="flex items-center gap-2">
+            Developed for <span className="text-blue-500/60">Academic Excellence</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
 };
 
 export default Footer;

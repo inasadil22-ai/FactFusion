@@ -2,53 +2,46 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 // Pages
-import Hero from './components/Hero';
+
 import About from './pages/About';
 import AnalysisHistory from './pages/AnalysisHistory';
 import Detection from './pages/Detection';
 import XAIInsights from './pages/XAIInsights';
-import TeamsPage from './pages/TeamsPage';
-import DrawPage from './pages/DrawPage';
-import TeamDashboard from './pages/TeamDashboard';
-import AdminDashboard from './pages/AdminDashboard';
+import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
-
 // Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import Hero from './components/Hero';
+
 import ProtectedRoute from './utils/ProtectedRoute';
+
 
 function App() {
   return (
-    <Router>
-      <div className="w-full min-h-screen bg-black text-white flex flex-col">
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      {/* min-h-screen + flex-col is the "glue" that keeps the footer down */}
+      <div className="flex flex-col min-h-screen bg-[#020617] text-white">
+
         <Navbar />
 
-        <div className="flex-grow">
+        {/* main flex-grow fills the gap between Nav and Footer */}
+        <main className="flex-grow flex flex-col w-full relative pt-20">
           <Routes>
-            {/* Public Routes - Accessible without login */}
             <Route path="/" element={<Hero />} />
-            <Route path="/about" element={<About />} />
             <Route path="/login" element={<Login />} />
-            
-            {/* --- Protected Routes Wrapper --- */}
-            {/* All routes nested here will require the user to be logged in */}
+            <Route path="/about" element={<About />} />
+
             <Route element={<ProtectedRoute />}>
-              <Route path="/teams" element={<TeamsPage />} />
-              <Route path="/draw" element={<DrawPage />} />
               <Route path="/analysis-history" element={<AnalysisHistory />} />
               <Route path="/detection" element={<Detection />} />
               <Route path="/xai" element={<XAIInsights />} />
-              
-              {/* Dashboards (Also Protected) */}
-              <Route path="/team-dashboard" element={<TeamDashboard />} />
-              <Route path="/admin-dashboard" element={<AdminDashboard />} />
+              <Route path="/team-dashboard" element={<Dashboard />} />
             </Route>
 
-            {/* Fallback Route */}
-            <Route path="*" element={<div className="p-20 text-center text-white">Page Not Found</div>} />
+            <Route path="*" element={<div className="flex-grow flex items-center justify-center">404 - Not Found</div>} />
           </Routes>
-        </div>
+        </main>
 
         <Footer />
       </div>
