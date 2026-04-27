@@ -1,0 +1,9 @@
+venv/
+backend/venv/
+backend/models/
+models_files/
+*.pt
+*.zip
+*.dll
+*.pyd
+__pycache__/
