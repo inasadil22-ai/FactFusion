@@ -25,7 +25,7 @@ The model files are **too large for GitHub** and are hosted on Google Drive. You
 |---|---|---|
 | Semantic Model (`disaster_pro_model_BEST.pt`) | ~132 MB | [Download from Google Drive](https://drive.google.com/file/d/1bn0nNm0GPKfEZ-wZ9DC8Ngov_7AXFC06/view?usp=sharing) |
 | Forensic Model (`forensic_v2_model_BEST.pt`) | ~132 MB | [Download from Google Drive](https://drive.google.com/file/d/1gUnvMpDenDIMbe_4apTFhvbhZGEEUkeo/view?usp=sharing) |
-| Text Model (`text_model/` folder) | ~475 MB | [Download from Google Drive](https://drive.google.com/drive/folders/YOUR_TEXT_MODEL_FOLDER_LINK) |
+| Text Model (`text_model/` folder) | ~475 MB | [Download from Google Drive](https://drive.google.com/file/d/1QKbVGsz4jSgrojLV83OqP_y_C5oxDIsK/view?usp=sharing) |
 
 > 📌 Replace the Text Model link above with your actual Google Drive folder link after uploading the `text_model/` directory.
 
