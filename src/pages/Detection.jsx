@@ -81,15 +81,23 @@ const Detection = () => {
     setLoading(true);
     setResult(null);
 
+    // Capture which modalities are active BEFORE the async call
+    const hasText = !!(textValue && textValue.trim());
+    const hasImage = !!selectedFile;
+
     const formData = new FormData();
-    formData.append('text', textValue);
-    if (selectedFile) formData.append('file', selectedFile);
+    if (hasText) formData.append('text', textValue.trim());
+    if (hasImage) formData.append('file', selectedFile);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/v1/analyze', formData, {
+      const response = await axios.post('http://127.0.0.1:5000/api/v1/analyze', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setResult(response.data);
+      // Backend never sends active_modalities — inject it from what we submitted
+      setResult({
+        ...response.data,
+        active_modalities: { text: hasText, image: hasImage }
+      });
     } catch (error) {
       console.error("API Error:", error);
       alert("Failed to connect to AI server. Ensure Flask is running.");
@@ -207,6 +215,92 @@ const Detection = () => {
                   </div>
                 </div>
                 <button onClick={downloadPDF} className="p-4 bg-white/10 rounded-2xl"><Download /></button>
+              </div>
+
+              {/* Pipeline Tracking Section */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                {/* Stage 1: Text Analysis — highlighted when text is active */}
+                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${
+                  result.active_modalities?.text
+                    ? 'bg-indigo-500/10 border-indigo-500/40 shadow-[0_0_30px_rgba(99,102,241,0.15)]'
+                    : 'bg-white/[0.03] border-white/10 opacity-40'
+                }`}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10"><FileText size={40} /></div>
+                  <h4 className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] mb-4">Stage 1: Text Analysis</h4>
+                  <p className="text-lg font-bold text-white leading-tight">
+                    {result.stage_2_text_analysis?.text_label || 'N/A'}
+                  </p>
+                  <div className="mt-4">
+                    {result.active_modalities?.text ? (
+                      <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${
+                        result.stage_2_text_analysis?.text_label === "Unverified Rumor"
+                        ? "bg-red-500/10 border-red-500/20 text-red-300"
+                        : "bg-indigo-500/10 border-indigo-500/20 text-indigo-300"
+                      }`}>
+                        {result.stage_2_text_analysis?.text_label === "Unverified Rumor" ? "Integrity Audit Flagged" : "Integrity Audit Passed"}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 bg-gray-500/10 rounded border border-gray-500/20 text-gray-400 font-black uppercase">
+                        No Text Provided
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stage 2: Image Analysis — highlighted when image is active */}
+                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${
+                  result.active_modalities?.image
+                    ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_30px_rgba(59,130,246,0.15)]'
+                    : 'bg-white/[0.03] border-white/10 opacity-40'
+                }`}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10"><ImageIcon size={40} /></div>
+                  <h4 className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] mb-4">Stage 2: Image Analysis</h4>
+                  <p className="text-lg font-bold text-white leading-tight">
+                    {result.stage_1_image_analysis?.combined_image_label || 'N/A'}
+                  </p>
+                  <div className="mt-4 flex gap-2">
+                    {result.active_modalities?.image ? (
+                      <>
+                        <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 rounded border border-blue-500/20 text-blue-300 font-black">
+                          {result.stage_1_image_analysis?.semantic_label || 'N/A'}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 rounded border border-purple-500/20 text-purple-300 font-black">
+                          {result.stage_1_image_analysis?.forensic_label || 'N/A'}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 bg-gray-500/10 rounded border border-gray-500/20 text-gray-400 font-black uppercase">
+                        No Image Provided
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stage 3: Multimodal Fusion — highlighted only when both active */}
+                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${
+                  result.active_modalities?.image && result.active_modalities?.text
+                    ? 'bg-purple-500/10 border-purple-500/40 shadow-[0_0_30px_rgba(168,85,247,0.15)]'
+                    : 'bg-white/[0.03] border-white/10 opacity-40'
+                }`}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10"><Zap size={40} /></div>
+                  <h4 className="text-[10px] text-purple-400 font-black uppercase tracking-[0.2em] mb-4">Stage 3: Multimodal Fusion</h4>
+                  <p className="text-lg font-bold text-white leading-tight">
+                    {(result.active_modalities?.image && result.active_modalities?.text)
+                      ? result.stage_3_multimodal_fusion?.multimodal_label
+                      : 'N/A — Single Modality'}
+                  </p>
+                  <div className="mt-4">
+                    <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${
+                      (result.active_modalities?.image && result.active_modalities?.text)
+                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-300'
+                        : 'bg-gray-500/10 border-gray-500/20 text-gray-400'
+                    }`}>
+                      {(result.active_modalities?.image && result.active_modalities?.text) ? 'Final Verdict' : 'Requires Both Modalities'}
+                    </span>
+                  </div>
+                </div>
+
               </div>
 
               {/* Gauges Section */}

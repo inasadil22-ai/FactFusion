@@ -14,3 +14,7 @@ albumentations
 google-search-results
 Pillow
 transformers
+numpy
+sentencepiece
+accelerate
+huggingface-hub

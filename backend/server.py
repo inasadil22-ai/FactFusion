@@ -29,7 +29,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-CORS(app, origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"])
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 db = initialize_db(app)
 bcrypt = Bcrypt(app)
 
@@ -43,7 +43,7 @@ def clean_mongo_record(record):
 @app.route('/api/v1/analyze', methods=['POST'])
 def analyze_content():
     try:
-        text_content = request.form.get('text', '')
+        text_content = request.form.get('text', '').strip()  # Strip whitespace so empty string = no text
         file = request.files.get('file')
         
         filename = None
@@ -54,16 +54,26 @@ def analyze_content():
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
 
-        # Use the multimodal service
-        result_data = multimodal_service.analyze(image_path=file_path, caption=text_content)
-                
-        # Create Response Payload
+        # Use the multimodal service (pass None for caption if no text provided)
+        result_data = multimodal_service.analyze(image_path=file_path, caption=text_content if text_content else None)
+        
+        if "error" in result_data:
+            return jsonify(result_data), 500
+
+        # Create Response Payload following the 3-stage structure strictly
+        final_response = {
+            "stage_1_image_analysis": result_data["stage_1_image_analysis"],
+            "stage_2_text_analysis": result_data["stage_2_text_analysis"],
+            "stage_3_multimodal_fusion": result_data["stage_3_multimodal_fusion"]
+        }
+        
+        # Merge with backward-compatible fields for DB and legacy frontend components
         analysis_entry = {
+            **final_response,
             "text_snippet": text_content,
             "image_ref": filename,
             "verdict": result_data["verdict"],
             "credibility_score": round(result_data["credibility_score"], 2),
-            "text_analysis": None, # Kept for schema compatibility
             "image_score": round(result_data.get("image_score", 0), 2) if result_data.get("image_score") is not None else None,
             "xai_insights": result_data["xai_insights"],
             "created_at": datetime.datetime.utcnow()
@@ -149,4 +159,4 @@ def delete_analysis_record(id):
         return jsonify({'error': 'Invalid ID format'}), 400
 
 if __name__ == '__main__':
-    app.run(host='::', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

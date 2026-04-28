@@ -21,7 +21,7 @@ const AnalysisHistory = () => {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/v1/analysis-history');
+      const response = await axios.get('http://127.0.0.1:5000/api/v1/analysis-history');
       const data = Array.isArray(response.data) ? response.data : [];
       setHistory(data);
     } catch (err) {

@@ -1,9 +1,49 @@
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+
+# ── Virtual Environments ─────────────────────────────────
 venv/
 backend/venv/
-backend/models/
-models_files/
+.venv/
+
+# ── Model Files (too large for GitHub — see README) ──────
 *.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
 *.zip
+*.tar
+*.tar.gz
+*.pkl
+*.h5
+*.onnx
 *.dll
-*.pyd
-__pycache__/
+*.pb
+
+# Entire model directories
+backend/models/
+models/
+
+# ── Node / Frontend ──────────────────────────────────────
+node_modules/
+dist/
+
+# ── Uploads (user-submitted images at runtime) ───────────
+backend/uploads/
+
+# ── Environment / Secrets ────────────────────────────────
+.env
+.env.*
+backend/.env
+backend/.env.*
+
+# ── OS Junk ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────
+.vscode/settings.json

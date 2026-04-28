@@ -73,7 +73,7 @@ const Login = () => {
         ? { email, password: passwordHash } 
         : { email, password_hash: passwordHash, role: 'standard' };
 
-      const response = await axios.post(`http://localhost:5000${endpoint}`, payload);
+      const response = await axios.post(`http://127.0.0.1:5000${endpoint}`, payload);
       
       localStorage.setItem('user', JSON.stringify(response.data.user));
       localStorage.setItem('accessToken', response.data.token || 'SESSION_ACTIVE'); 
