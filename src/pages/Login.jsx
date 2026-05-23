@@ -73,7 +73,8 @@ const Login = () => {
         ? { email, password: passwordHash } 
         : { email, password_hash: passwordHash, role: 'standard' };
 
-      const response = await axios.post(`http://127.0.0.1:5000${endpoint}`, payload);
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000';
+      const response = await axios.post(`${apiBase}${endpoint}`, payload);
       
       localStorage.setItem('user', JSON.stringify(response.data.user));
       localStorage.setItem('accessToken', response.data.token || 'SESSION_ACTIVE'); 

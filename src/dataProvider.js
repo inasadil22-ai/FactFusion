@@ -2,7 +2,8 @@ import { fetchUtils } from 'react-admin';
 import axios from 'axios';
 
 // The new base URL for your structured API
-const apiUrl = 'http://127.0.0.1:5000/api/v1'; 
+const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000';
+const apiUrl = `${apiBase}/api/v1`; 
 const httpClient = fetchUtils.fetchJson;
 
 // Function to handle the custom API structure
