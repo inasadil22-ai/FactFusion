@@ -293,7 +293,7 @@ const AnalysisHistory = () => {
                           );
                         })()}
                         <p className="text-[11px] text-white/40 font-medium leading-relaxed max-w-sm group-hover:text-white/70 transition-colors">
-                          {item.xai_insights?.explanation || "Neural engine explanation pending."}
+                          {(item.xai_insights?.explanation || "Neural engine explanation pending.").split(' | Audit Path: ')[0]}
                         </p>
                       </div>
                     </td>

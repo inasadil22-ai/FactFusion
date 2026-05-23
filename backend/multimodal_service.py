@@ -351,7 +351,8 @@ class MultimodalService:
             # Merge global flags with fine-grained model keywords, removing duplicates
             combined_text_weights = list(dict.fromkeys(flags + model_keywords))[:6]
 
-            explanation_text = f"{reasoning} | Audit Path: [Image: {image_analysis['combined_image_label']}] → [Text: {text_analysis['text_label']}] → [Final: {multimodal_label}]"
+            explanation_text = reasoning
+            audit_path_text = f"[Image: {image_analysis['combined_image_label']}] → [Text: {text_analysis['text_label']}] → [Final: {multimodal_label}]"
 
             # --- EXECUTE XAI ENGINE ---
             xai_payload = {
@@ -416,6 +417,7 @@ class MultimodalService:
                 "image_score": image_score,
                 "xai_insights": {
                     "explanation": explanation_text,
+                    "audit_path": audit_path_text,
                     "text_weights": combined_text_weights,
                     "text_attributions": xai_payload["text_attributions"],
                     "visual_heatmap": xai_payload["visual_heatmap"],

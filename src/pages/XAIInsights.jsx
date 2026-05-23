@@ -314,8 +314,8 @@ const XAIInsights = () => {
 
                           <div className="mt-6 flex items-center gap-3">
                             <span className={`text-[10px] px-3 py-1 rounded-lg border font-black uppercase ${xai.heatmap_status?.includes('AVAILABLE')
-                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                                : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                              : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
                               }`}>
                               {xai.heatmap_status || 'UNKNOWN'}
                             </span>
@@ -339,7 +339,7 @@ const XAIInsights = () => {
                         <p className="text-[10px] text-white/30 uppercase tracking-wider mt-1">Why was this verdict chosen?</p>
                       </div>
                       <p className="text-lg italic text-white/80 mb-6 leading-relaxed">
-                        "{xai.explanation || 'No automated explanation generated.'}"
+                        "{(xai.explanation || '').split(' | Audit Path: ')[0] || 'No automated explanation generated.'}"
                       </p>
 
                       {/* Verdict Badge */}
@@ -373,8 +373,8 @@ const XAIInsights = () => {
                       <div className="space-y-4">
                         {/* Stage 1: Text */}
                         <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasText
-                            ? 'bg-indigo-500/5 border-indigo-500/20'
-                            : 'bg-white/[0.02] border-white/5 opacity-40'
+                          ? 'bg-indigo-500/5 border-indigo-500/20'
+                          : 'bg-white/[0.02] border-white/5 opacity-40'
                           }`}>
                           <div className={`p-2 rounded-lg ${hasText ? 'bg-indigo-500/20' : 'bg-white/10'}`}>
                             <FileText size={16} className={hasText ? 'text-indigo-400' : 'text-white/30'} />
@@ -387,8 +387,8 @@ const XAIInsights = () => {
                           </div>
                           {hasText && (
                             <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor'
-                                ? 'bg-red-500/10 border-red-500/20 text-red-300'
-                                : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
+                              ? 'bg-red-500/10 border-red-500/20 text-red-300'
+                              : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
                               }`}>
                               {selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor' ? 'Flagged' : 'Passed'}
                             </span>
@@ -397,8 +397,8 @@ const XAIInsights = () => {
 
                         {/* Stage 2: Image */}
                         <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasImage
-                            ? 'bg-blue-500/5 border-blue-500/20'
-                            : 'bg-white/[0.02] border-white/5 opacity-40'
+                          ? 'bg-blue-500/5 border-blue-500/20'
+                          : 'bg-white/[0.02] border-white/5 opacity-40'
                           }`}>
                           <div className={`p-2 rounded-lg ${hasImage ? 'bg-blue-500/20' : 'bg-white/10'}`}>
                             <ImageIcon size={16} className={hasImage ? 'text-blue-400' : 'text-white/30'} />
@@ -425,8 +425,8 @@ const XAIInsights = () => {
 
                         {/* Stage 3: Fusion */}
                         <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasText && hasImage
-                            ? 'bg-purple-500/5 border-purple-500/20'
-                            : 'bg-white/[0.02] border-white/5 opacity-40'
+                          ? 'bg-purple-500/5 border-purple-500/20'
+                          : 'bg-white/[0.02] border-white/5 opacity-40'
                           }`}>
                           <div className={`p-2 rounded-lg ${hasText && hasImage ? 'bg-purple-500/20' : 'bg-white/10'}`}>
                             <Zap size={16} className={hasText && hasImage ? 'text-purple-400' : 'text-white/30'} />
@@ -440,8 +440,8 @@ const XAIInsights = () => {
                             </p>
                           </div>
                           <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${hasText && hasImage
-                              ? 'bg-purple-500/10 border-purple-500/20 text-purple-300'
-                              : 'bg-gray-500/10 border-gray-500/20 text-gray-400'
+                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-300'
+                            : 'bg-gray-500/10 border-gray-500/20 text-gray-400'
                             }`}>
                             {hasText && hasImage ? 'Final Verdict' : 'Single Mode'}
                           </span>
