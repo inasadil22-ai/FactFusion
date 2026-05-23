@@ -22,7 +22,8 @@ const AnalysisHistory = () => {
     setLoading(true);
     try {
       const userString = localStorage.getItem('user');
-      let url = 'http://127.0.0.1:5000/api/v1/analysis-history';
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000';
+      let url = `${apiBase}/api/v1/analysis-history`;
       if (userString) {
         try {
           const user = JSON.parse(userString);

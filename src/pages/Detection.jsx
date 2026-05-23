@@ -172,7 +172,8 @@ const Detection = () => {
     }
 
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/v1/analyze', formData, {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000';
+      const response = await axios.post(`${apiBase}/api/v1/analyze`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       // Backend never sends active_modalities — inject it from what we submitted
