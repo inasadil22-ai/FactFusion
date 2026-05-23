@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -152,12 +152,12 @@ const XAIInsights = () => {
             <p className="text-white/40 max-w-md mb-8 font-medium">
               Run your first detection to generate XAI evidence. Token attributions, heatmaps, and audit trails will appear here.
             </p>
-            <a
-              href="/detection"
+            <Link
+              to="/detection"
               className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-sm hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95 transition-all duration-300"
             >
               Go to Detection <ArrowRight size={16} />
-            </a>
+            </Link>
           </motion.div>
         )}
 
