@@ -115,10 +115,10 @@ const AnalysisHistory = () => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4"
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6"
             >
-              <Shield className="text-blue-400 w-3.5 h-3.5" />
-              <span className="text-xs font-bold tracking-[0.2em] text-blue-300 uppercase">Integrity Archive</span>
+              <Shield className="text-blue-400 w-4 h-4" />
+              <span className="text-[10px] font-black tracking-[0.2em] text-blue-300 uppercase">Integrity Archive</span>
             </motion.div>
 
             <motion.h1

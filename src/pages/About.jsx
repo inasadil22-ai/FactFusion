@@ -24,10 +24,10 @@ const About = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6 backdrop-blur-md"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6 backdrop-blur-md"
           >
             <ShieldCheck className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] tracking-[0.2em] text-blue-300 uppercase font-bold">Disaster Intelligence</span>
+            <span className="text-[10px] font-black tracking-[0.2em] text-blue-300 uppercase">Disaster Intelligence</span>
           </motion.div>
 
           <motion.h1
