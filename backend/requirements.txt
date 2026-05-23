@@ -18,3 +18,4 @@ numpy
 sentencepiece
 accelerate
 huggingface-hub
+requests==2.31.0
