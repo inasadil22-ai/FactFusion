@@ -43,6 +43,18 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
+  const getVerdictCategory = (verdict) => {
+    if (!verdict) return 'OOD';
+    const v = verdict.toUpperCase();
+    if (v.includes('CREDIBLE') || v.includes('INFORMATIVE') || v.includes('AUTHENTIC')) {
+      return 'Informative';
+    }
+    if (v.includes('MISINFORMATION') || v.includes('HIGH RISK') || v.includes('SUSPICIOUS') || v.includes('NON-INFORMATIVE') || v.includes('MANIPULATED') || v.includes('RUMOR')) {
+      return 'Non-Informative';
+    }
+    return 'OOD';
+  };
+
   // --- Multi-Modal Threat Logic ---
   const stats = useMemo(() => {
     const total = data.length;
@@ -52,19 +64,24 @@ const Dashboard = () => {
     // Non-Informative -> Subjective/Vague (Potentially Misinfo/Noise)
     // OOD -> Irrelevant (Filtered)
 
-    const verifiableItems = data.filter(item => item.verdict === 'Informative');
-    const nonInformativeItems = data.filter(item => item.verdict === 'Non-Informative');
-    const oodItems = data.filter(item => item.verdict === 'OOD');
+    const verifiableItems = data.filter(item => getVerdictCategory(item.verdict) === 'Informative');
+    const nonInformativeItems = data.filter(item => getVerdictCategory(item.verdict) === 'Non-Informative');
+    const oodItems = data.filter(item => getVerdictCategory(item.verdict) === 'OOD');
 
     const suspiciousCount = nonInformativeItems.length + oodItems.length;
 
-    // Categorize "Threats" (Noise/Misinfo) by type
-    // Since our current model is text-heavy, we treat Non-Info as Text Threats mostly.
-    // If we had image logic, we'd check item.threat_origin
+    // Categorize "Threats" (Noise/Misinfo) by type:
+    // 1. Fusion Mismatch: if verdict string has 'MISMATCH' or 'UNRELATED CAPTION'
+    const mismatchThreats = data.filter(item => {
+      const v = (item.verdict || "").toUpperCase();
+      return v.includes('MISMATCH') || v.includes('UNRELATED CAPTION');
+    }).length;
 
-    const textThreats = nonInformativeItems.length;
-    const filteredThreats = oodItems.length; // OOD
-    const mismatchThreats = 0; // Placeholder until multimodal mismatch logic is robust
+    // 2. Out of Context: items categorized as OOD
+    const filteredThreats = oodItems.length;
+
+    // 3. Subjective/Noise: other non-informative items (text rumors, manipulated images, alarmist, etc.)
+    const textThreats = Math.max(0, nonInformativeItems.length - mismatchThreats);
 
     const avgConfidence = data.reduce((acc, curr) => acc + (curr.credibility_score || 0), 0) / (total || 1);
 

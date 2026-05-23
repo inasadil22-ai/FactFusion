@@ -281,13 +281,17 @@ const AnalysisHistory = () => {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex flex-col gap-1">
-                        <div className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-tighter ${item.verdict === 'Informative' ? 'text-emerald-400' :
-                          item.verdict === 'Non-Informative' ? 'text-red-400' : 'text-gray-400'
-                          }`}>
-                          {item.verdict === 'Informative' ? <CheckCircle2 size={12} /> :
-                            item.verdict === 'Non-Informative' ? <AlertTriangle size={12} /> : <Shield size={12} />}
-                          {item.verdict || "UNCATEGORIZED"}
-                        </div>
+                        {(() => {
+                          const cat = getVerdictCategory(item.verdict);
+                          const catColor = cat === 'Informative' ? 'text-emerald-400' : cat === 'Non-Informative' ? 'text-red-400' : 'text-gray-400';
+                          return (
+                            <div className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-tighter ${catColor}`}>
+                              {cat === 'Informative' ? <CheckCircle2 size={12} /> :
+                                cat === 'Non-Informative' ? <AlertTriangle size={12} /> : <Shield size={12} />}
+                              {item.verdict || "UNCATEGORIZED"}
+                            </div>
+                          );
+                        })()}
                         <p className="text-[11px] text-white/40 font-medium leading-relaxed max-w-sm group-hover:text-white/70 transition-colors">
                           {item.xai_insights?.explanation || "Neural engine explanation pending."}
                         </p>
