@@ -20,7 +20,19 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/api/v1/analysis-history');
+        const userString = localStorage.getItem('user');
+        let url = 'http://127.0.0.1:5000/api/v1/analysis-history';
+        if (userString) {
+          try {
+            const user = JSON.parse(userString);
+            if (user && user.id && user.role !== 'admin') {
+              url += `?user_id=${user.id}`;
+            }
+          } catch (e) {
+            console.error("Error parsing user for dashboard query:", e);
+          }
+        }
+        const response = await axios.get(url);
         setData(Array.isArray(response.data) ? response.data : []);
       } catch (err) {
         console.error("Dashboard Fetch Error:", err);
@@ -79,17 +91,35 @@ const Dashboard = () => {
 
         {/* --- Header --- */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
-            <h1 className="text-5xl font-black tracking-tighter mb-2">
-              Neural <span className="text-blue-500">Command.</span>
-            </h1>
-            <p className="text-blue-100/40 text-lg italic tracking-wide">Multimodal Detection Intelligence</p>
-          </motion.div>
+          <header>
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="text-4xl md:text-5xl font-black tracking-tighter mb-2 leading-[0.9]"
+            >
+              <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-blue-200">
+                Neural <span className="text-blue-500 inline-block drop-shadow-[0_0_30px_rgba(59,130,246,0.3)]">Command.</span>
+              </span>
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-blue-100/40 text-lg italic tracking-wide"
+            >
+              Multimodal Detection Intelligence
+            </motion.p>
+          </header>
 
-          <div className="px-5 py-2 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center gap-3">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="px-5 py-2 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center gap-3"
+          >
             <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-black text-blue-400 uppercase tracking-[0.2em]">Engine: Online</span>
-          </div>
+          </motion.div>
         </div>
 
         {/* --- Metrics Row (Snappy Transitions) --- */}

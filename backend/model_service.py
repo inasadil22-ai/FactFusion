@@ -132,6 +132,7 @@ class ModelLoader:
             "label": final_label,
             "confidence": final_confidence,
             "is_uncertain": is_uncertain, # For Fusion Stage
+            "is_disaster": has_context, # Added to support multimodal_service.py flags
             "xai": {
                 "explanation": explanation,
                 "text_weights": xai_weights or ["ANALYSIS-COMPLETE"]

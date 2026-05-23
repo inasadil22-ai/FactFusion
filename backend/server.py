@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
@@ -29,7 +29,12 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {
+    "origins": "*",
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+    "expose_headers": ["Content-Type"]
+}})
 db = initialize_db(app)
 bcrypt = Bcrypt(app)
 
@@ -45,6 +50,7 @@ def analyze_content():
     try:
         text_content = request.form.get('text', '').strip()  # Strip whitespace so empty string = no text
         file = request.files.get('file')
+        user_id = request.form.get('user_id')
         
         filename = None
         file_path = None
@@ -76,7 +82,8 @@ def analyze_content():
             "credibility_score": round(result_data["credibility_score"], 2),
             "image_score": round(result_data.get("image_score", 0), 2) if result_data.get("image_score") is not None else None,
             "xai_insights": result_data["xai_insights"],
-            "created_at": datetime.datetime.utcnow()
+            "created_at": datetime.datetime.utcnow(),
+            "user_id": user_id
         }
         
         # Save to MongoDB
@@ -111,7 +118,14 @@ def signup_user():
             'created_at': datetime.datetime.utcnow()
         }
         result = db.users.insert_one(new_user)
-        return jsonify({'message': 'User created', 'id': str(result.inserted_id)}), 201
+        return jsonify({
+            'user': {
+                'id': str(result.inserted_id),
+                'email': email,
+                'role': new_user['role']
+            },
+            'message': 'User created'
+        }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -142,7 +156,11 @@ def login_user():
 @app.route('/api/v1/analysis-history', methods=['GET'])
 def list_analysis_history():
     try:
-        records = list(db.analysis.find().sort("created_at", -1))
+        user_id = request.args.get('user_id')
+        query = {}
+        if user_id:
+            query["user_id"] = user_id
+        records = list(db.analysis.find(query).sort("created_at", -1))
         data = [clean_mongo_record(r) for r in records]
         return jsonify(data), 200
     except Exception as e:
@@ -157,6 +175,12 @@ def delete_analysis_record(id):
         return jsonify({'error': 'Not found'}), 404
     except Exception as e:
         return jsonify({'error': 'Invalid ID format'}), 400
+
+
+# --- SERVE UPLOADED IMAGES ---
+@app.route('/uploads/<filename>')
+def serve_upload(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

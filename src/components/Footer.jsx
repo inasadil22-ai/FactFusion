@@ -75,10 +75,10 @@ const Footer = () => {
               <div className="pt-2">
                 <div className="flex justify-between text-[9px] text-blue-400/60 uppercase mb-1 font-bold">
                   <span>Development Phase</span>
-                  <span>80%</span>
+                  <span>100%</span>
                 </div>
                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div className="w-[80%] h-full bg-gradient-to-r from-blue-600 to-indigo-500" />
+                  <div className="w-[100%] h-full bg-gradient-to-r from-blue-600 to-indigo-500" />
                 </div>
               </div>
             </div>

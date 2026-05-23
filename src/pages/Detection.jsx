@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -10,7 +11,74 @@ import {
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix }) => {
+  const canvasRef = useRef(null);
+  const [opacity, setOpacity] = useState(0.6);
+
+  useEffect(() => {
+    if (!heatmapMatrix || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = originalImageSrc;
+
+    img.onload = () => {
+      // Establish uniform canvas coordinate boundaries
+      canvas.width = 224;
+      canvas.height = 224;
+
+      // Stage 1: Draw underlying source image frame
+      ctx.drawImage(img, 0, 0, 224, 224);
+
+      // Stage 2: Construct alpha-mapped pixel array based on heatmap weights
+      const imgData = ctx.getImageData(0, 0, 224, 224);
+      const data = imgData.data;
+
+      // Map out 224x224 data spatial dimensions
+      for (let y = 0; y < 224; y++) {
+        for (let x = 0; x < 224; x++) {
+          const pixelIdx = (y * 224 + x) * 4;
+          // Extract the direct coordinate scalar score generated from PyTorch Grad-CAM
+          const weight = heatmapMatrix[y]?.[x] || 0;
+
+          if (weight > 0.1) {
+            // Hotspot mapping: Interpolate red spectrum intensity based on XAI node values
+            data[pixelIdx] = 239;     // Red Channel
+            data[pixelIdx + 1] = 68;  // Green Channel
+            data[pixelIdx + 2] = 68;  // Blue Channel
+            data[pixelIdx + 3] = Math.floor(weight * opacity * 255); // Alpha Opacity Mapping
+          }
+        }
+      }
+      // Commit modified pixel arrays back down onto Canvas viewport context
+      ctx.putImageData(imgData, 0, 0);
+    };
+  }, [originalImageSrc, heatmapMatrix, opacity]);
+
+  return (
+    <div className="flex flex-col items-center gap-4 bg-zinc-900/40 p-4 rounded-xl border border-zinc-800">
+      <div className="relative overflow-hidden rounded-lg shadow-inner border border-zinc-700 w-[224px] h-[224px]">
+        <canvas ref={canvasRef} className="absolute inset-0 block" />
+      </div>
+      <div className="w-full max-w-[224px] space-y-1">
+        <label className="text-xs font-semibold text-zinc-400 flex justify-between">
+          <span>Heatmap Intensity:</span>
+          <span>{Math.round(opacity * 100)}%</span>
+        </label>
+        <input
+          type="range" min="0" max="1" step="0.05" value={opacity}
+          onChange={(e) => setOpacity(parseFloat(e.target.value))}
+          className="w-full accent-emerald-500 bg-zinc-700 h-1 rounded-lg cursor-pointer appearance-none"
+        />
+      </div>
+    </div>
+  );
+};
+
 const Detection = () => {
+  const navigate = useNavigate();
   // --- STATE MANAGEMENT ---
   const [activeTab, setActiveTab] = useState('multimodal');
   const [textValue, setTextValue] = useState("");
@@ -74,20 +142,34 @@ const Detection = () => {
 
   // --- API CALL ---
   const handleAnalyze = async () => {
-    if (!textValue && !selectedFile) {
-      alert("Please provide text or an image.");
+    // --- FIX: Issue 4 (Modality States Ignored on Tab Switch) ---
+    // Constrain inputs strictly to what the active tab allows
+    const hasText = activeTab !== 'image' && !!(textValue && textValue.trim());
+    const hasImage = activeTab !== 'text' && !!selectedFile;
+
+    if (!hasText && !hasImage) {
+      alert("Please provide text or an image for the selected analysis mode.");
       return;
     }
     setLoading(true);
     setResult(null);
 
-    // Capture which modalities are active BEFORE the async call
-    const hasText = !!(textValue && textValue.trim());
-    const hasImage = !!selectedFile;
-
     const formData = new FormData();
     if (hasText) formData.append('text', textValue.trim());
     if (hasImage) formData.append('file', selectedFile);
+
+    // Append user_id if logged in
+    const userString = localStorage.getItem('user');
+    if (userString) {
+      try {
+        const user = JSON.parse(userString);
+        if (user && user.id) {
+          formData.append('user_id', user.id);
+        }
+      } catch (e) {
+        console.error("Error parsing user context:", e);
+      }
+    }
 
     try {
       const response = await axios.post('http://127.0.0.1:5000/api/v1/analyze', formData, {
@@ -199,33 +281,53 @@ const Detection = () => {
             <motion.div ref={reportRef} initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} className="space-y-12">
 
               {/* Main Verdict Card */}
-              {/* Main Verdict Card */}
-              <div className={`p-6 rounded-[2.5rem] border-2 flex items-center justify-between gap-8 ${result.verdict === 'Informative' ? 'bg-emerald-500/5 border-emerald-500/20' :
-                result.verdict === 'Non-Informative' ? 'bg-red-500/5 border-red-500/20' : 'bg-gray-500/5 border-gray-500/20'
-                }`}>
-                <div className="flex items-center gap-6">
-                  <div className={`p-5 rounded-[1.5rem] ${result.verdict === 'Informative' ? 'bg-emerald-500/20 text-emerald-400' :
-                    result.verdict === 'Non-Informative' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'
-                    }`}>
-                    {result.verdict === 'Informative' ? <ShieldCheck size={40} /> : result.verdict === 'Non-Informative' ? <AlertTriangle size={40} /> : <ShieldAlert size={40} />}
+              {(() => {
+                // --- FIX: Issue 2 (Main Verdict Card Color and Icon Mismatches) ---
+                const verdictStr = result?.verdict || '';
+                const isCredible = verdictStr.includes('CREDIBLE') || verdictStr === 'Informative';
+                const isHighRisk = verdictStr.includes('HIGH RISK') || verdictStr.includes('MISINFORMATION') || verdictStr === 'Non-Informative';
+                const isSuspicious = verdictStr.includes('SUSPICIOUS') || verdictStr.includes('UNCERTAIN');
+
+                const cardStyles = isCredible
+                  ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
+                  : isHighRisk
+                    ? 'bg-red-500/5 border-red-500/20 text-red-400'
+                    : isSuspicious
+                      ? 'bg-amber-500/5 border-amber-500/20 text-amber-400'
+                      : 'bg-gray-500/5 border-gray-500/20 text-gray-400';
+
+                const iconContainerStyles = isCredible
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : isHighRisk
+                    ? 'bg-red-500/20 text-red-400'
+                    : isSuspicious
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : 'bg-gray-500/20 text-gray-400';
+
+                return (
+                  <div className={`p-6 rounded-[2.5rem] border-2 flex items-center justify-between gap-8 ${cardStyles}`}>
+                    <div className="flex items-center gap-6">
+                      <div className={`p-5 rounded-[1.5rem] ${iconContainerStyles}`}>
+                        {isCredible ? <ShieldCheck size={40} /> : isHighRisk ? <AlertTriangle size={40} /> : <ShieldAlert size={40} />}
+                      </div>
+                      <div>
+                        <h3 className="text-3xl font-bold">{result.verdict || "Analysis Result"}</h3>
+                        <p className="text-white/40 font-bold uppercase text-xs">Score: {((result.credibility_score || 0) * 100).toFixed(1)}%</p>
+                      </div>
+                    </div>
+                    <button onClick={downloadPDF} className="p-4 bg-white/10 rounded-2xl"><Download /></button>
                   </div>
-                  <div>
-                    <h3 className="text-3xl font-bold">{result.verdict || "Analysis Result"}</h3>
-                    <p className="text-white/40 font-bold uppercase text-xs">Score: {((result.credibility_score || 0) * 100).toFixed(1)}%</p>
-                  </div>
-                </div>
-                <button onClick={downloadPDF} className="p-4 bg-white/10 rounded-2xl"><Download /></button>
-              </div>
+                );
+              })()}
 
               {/* Pipeline Tracking Section */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                 {/* Stage 1: Text Analysis — highlighted when text is active */}
-                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${
-                  result.active_modalities?.text
+                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${result.active_modalities?.text
                     ? 'bg-indigo-500/10 border-indigo-500/40 shadow-[0_0_30px_rgba(99,102,241,0.15)]'
                     : 'bg-white/[0.03] border-white/10 opacity-40'
-                }`}>
+                  }`}>
                   <div className="absolute top-0 right-0 p-4 opacity-10"><FileText size={40} /></div>
                   <h4 className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] mb-4">Stage 1: Text Analysis</h4>
                   <p className="text-lg font-bold text-white leading-tight">
@@ -233,11 +335,10 @@ const Detection = () => {
                   </p>
                   <div className="mt-4">
                     {result.active_modalities?.text ? (
-                      <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${
-                        result.stage_2_text_analysis?.text_label === "Unverified Rumor"
-                        ? "bg-red-500/10 border-red-500/20 text-red-300"
-                        : "bg-indigo-500/10 border-indigo-500/20 text-indigo-300"
-                      }`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${result.stage_2_text_analysis?.text_label === "Unverified Rumor"
+                          ? "bg-red-500/10 border-red-500/20 text-red-300"
+                          : "bg-indigo-500/10 border-indigo-500/20 text-indigo-300"
+                        }`}>
                         {result.stage_2_text_analysis?.text_label === "Unverified Rumor" ? "Integrity Audit Flagged" : "Integrity Audit Passed"}
                       </span>
                     ) : (
@@ -249,11 +350,10 @@ const Detection = () => {
                 </div>
 
                 {/* Stage 2: Image Analysis — highlighted when image is active */}
-                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${
-                  result.active_modalities?.image
+                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${result.active_modalities?.image
                     ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_30px_rgba(59,130,246,0.15)]'
                     : 'bg-white/[0.03] border-white/10 opacity-40'
-                }`}>
+                  }`}>
                   <div className="absolute top-0 right-0 p-4 opacity-10"><ImageIcon size={40} /></div>
                   <h4 className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] mb-4">Stage 2: Image Analysis</h4>
                   <p className="text-lg font-bold text-white leading-tight">
@@ -278,11 +378,10 @@ const Detection = () => {
                 </div>
 
                 {/* Stage 3: Multimodal Fusion — highlighted only when both active */}
-                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${
-                  result.active_modalities?.image && result.active_modalities?.text
+                <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${result.active_modalities?.image && result.active_modalities?.text
                     ? 'bg-purple-500/10 border-purple-500/40 shadow-[0_0_30px_rgba(168,85,247,0.15)]'
                     : 'bg-white/[0.03] border-white/10 opacity-40'
-                }`}>
+                  }`}>
                   <div className="absolute top-0 right-0 p-4 opacity-10"><Zap size={40} /></div>
                   <h4 className="text-[10px] text-purple-400 font-black uppercase tracking-[0.2em] mb-4">Stage 3: Multimodal Fusion</h4>
                   <p className="text-lg font-bold text-white leading-tight">
@@ -291,11 +390,10 @@ const Detection = () => {
                       : 'N/A — Single Modality'}
                   </p>
                   <div className="mt-4">
-                    <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${
-                      (result.active_modalities?.image && result.active_modalities?.text)
+                    <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${(result.active_modalities?.image && result.active_modalities?.text)
                         ? 'bg-purple-500/10 border-purple-500/20 text-purple-300'
                         : 'bg-gray-500/10 border-gray-500/20 text-gray-400'
-                    }`}>
+                      }`}>
                       {(result.active_modalities?.image && result.active_modalities?.text) ? 'Final Verdict' : 'Requires Both Modalities'}
                     </span>
                   </div>
@@ -366,36 +464,30 @@ const Detection = () => {
                 )}
               </div>
 
-              {/* XAI Details */}
-              {/* XAI Details */}
-              {/* XAI Details */}
-              <div className={`grid gap-8 ${result.image_score !== undefined && result.image_score !== null ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-                {result.image_score !== undefined && result.image_score !== null && (
-                  <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-10">
-                    <h5 className="text-sm font-bold text-blue-400 mb-8 uppercase tracking-widest">Neural Focus (Grad-CAM)</h5>
-                    <div className="aspect-video rounded-[2rem] overflow-hidden bg-black/50 relative">
-                      {previewUrl && <img src={previewUrl} className="w-full h-full object-cover opacity-30" alt="XAI Base" />}
-                      <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/20 to-transparent mix-blend-overlay" />
-                    </div>
-                    <p className="mt-4 text-[10px] text-white/40 uppercase font-mono">Status: {result.xai_insights?.heatmap_status || "Rendered"}</p>
+              {/* Deep XAI Call to Action */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-transparent border border-blue-500/20 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6"
+              >
+                <div className="flex items-center gap-6">
+                  <div className="p-5 bg-blue-500/20 rounded-3xl text-blue-400 shadow-xl shadow-blue-500/10">
+                    <Fingerprint size={32} />
                   </div>
-                )}
-
-                <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-10">
-                  <div className="mb-8">
-                    <h5 className="text-sm font-bold text-indigo-400 uppercase tracking-widest">Logic Transparency</h5>
-                    <p className="text-[10px] text-white/30 uppercase tracking-wider mt-1">Why was this verdict chosen?</p>
-                  </div>
-                  <p className="text-lg italic text-white/80 mb-6">"{result.xai_insights?.explanation || "No automated explanation generated."}"</p>
-                  <div className="flex flex-wrap gap-2">
-                    {result.xai_insights?.text_weights?.map((word, i) => (
-                      <span key={i} className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs uppercase font-bold text-blue-300">
-                        {word}
-                      </span>
-                    ))}
+                  <div>
+                    <h4 className="text-xl font-black mb-1 italic tracking-tight">Neural Evidence Trace Available</h4>
+                    <p className="text-blue-100/40 text-sm max-w-md font-medium leading-relaxed">
+                      Deep explainable AI insights (including visual Grad-CAM focus heatmaps and keyword attributions) are ready for inspection.
+                    </p>
                   </div>
                 </div>
-              </div>
+                <button
+                  onClick={() => navigate(`/xai?id=${result.id}`)}
+                  className="px-10 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-900/40 hover:-translate-y-1"
+                >
+                  Explore XAI Evidence
+                </button>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

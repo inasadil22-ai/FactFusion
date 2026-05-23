@@ -21,7 +21,19 @@ const AnalysisHistory = () => {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://127.0.0.1:5000/api/v1/analysis-history');
+      const userString = localStorage.getItem('user');
+      let url = 'http://127.0.0.1:5000/api/v1/analysis-history';
+      if (userString) {
+        try {
+          const user = JSON.parse(userString);
+          if (user && user.id && user.role !== 'admin') {
+            url += `?user_id=${user.id}`;
+          }
+        } catch (e) {
+          console.error("Error parsing user for history query:", e);
+        }
+      }
+      const response = await axios.get(url);
       const data = Array.isArray(response.data) ? response.data : [];
       setHistory(data);
     } catch (err) {
@@ -45,10 +57,22 @@ const AnalysisHistory = () => {
     });
   }, [searchQuery, history]);
 
+  const getVerdictCategory = (verdict) => {
+    if (!verdict) return 'OOD';
+    const v = verdict.toUpperCase();
+    if (v.includes('CREDIBLE') || v.includes('INFORMATIVE') || v.includes('AUTHENTIC')) {
+      return 'Informative';
+    }
+    if (v.includes('MISINFORMATION') || v.includes('HIGH RISK') || v.includes('SUSPICIOUS') || v.includes('NON-INFORMATIVE') || v.includes('MANIPULATED') || v.includes('RUMOR')) {
+      return 'Non-Informative';
+    }
+    return 'OOD';
+  };
+
   const pieData = [
-    { name: 'Informative', value: history.filter(h => h.verdict === 'Informative').length },
-    { name: 'Non-Informative', value: history.filter(h => h.verdict === 'Non-Informative').length },
-    { name: 'OOD', value: history.filter(h => h.verdict === 'OOD').length },
+    { name: 'Informative', value: history.filter(h => getVerdictCategory(h.verdict) === 'Informative').length },
+    { name: 'Non-Informative', value: history.filter(h => getVerdictCategory(h.verdict) === 'Non-Informative').length },
+    { name: 'OOD', value: history.filter(h => getVerdictCategory(h.verdict) === 'OOD').length },
   ];
 
   const chartData = useMemo(() => {
@@ -87,17 +111,27 @@ const AnalysisHistory = () => {
 
         {/* --- Header Section (Detection Page Aesthetic) --- */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            {/* Pill Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
+          <header>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4"
+            >
               <Shield className="text-blue-400 w-3.5 h-3.5" />
               <span className="text-xs font-bold tracking-[0.2em] text-blue-300 uppercase">Integrity Archive</span>
-            </div>
+            </motion.div>
 
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter">
-              Crisis <span className="text-blue-500">Analytics</span>
-            </h1>
-          </motion.div>
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="text-4xl md:text-5xl font-black tracking-tighter leading-[0.9]"
+            >
+              <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-blue-200">
+                Crisis <span className="text-blue-500 inline-block drop-shadow-[0_0_30px_rgba(59,130,246,0.3)]">Analytics</span>
+              </span>
+            </motion.h1>
+          </header>
 
           {/* Search/Controls - Premium sizing but compact */}
           <div className="flex items-center gap-3">
@@ -132,7 +166,10 @@ const AnalysisHistory = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '12px', background: '#020617', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12px' }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '12px', background: '#020617', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: '#fff' }}
+                    itemStyle={{ color: '#fff' }}
+                  />
                   <Legend
                     layout="vertical"
                     verticalAlign="middle"
@@ -183,8 +220,11 @@ const AnalysisHistory = () => {
                       border: '1px solid rgba(255,255,255,0.1)',
                       borderRadius: '12px',
                       fontSize: '12px',
-                      padding: '10px'
+                      padding: '10px',
+                      color: '#fff'
                     }}
+                    itemStyle={{ color: '#fff' }}
+                    labelStyle={{ color: '#fff' }}
                     formatter={(value, name, props) => {
                       const realScore = props.payload.realScore !== undefined ? props.payload.realScore : value;
                       return [`${realScore}%`, 'Confidence'];

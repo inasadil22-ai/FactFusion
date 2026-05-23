@@ -20,24 +20,37 @@ const About = () => {
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-32 pb-24">
 
         {/* Header Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
-        >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6 backdrop-blur-md">
+        <header className="mb-12 text-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6 backdrop-blur-md"
+          >
             <ShieldCheck className="w-4 h-4 text-blue-400" />
             <span className="text-[10px] tracking-[0.2em] text-blue-300 uppercase font-bold">Disaster Intelligence</span>
-          </div>
+          </motion.div>
 
-          <h1 className="text-5xl md:text-6xl font-black mb-8 tracking-tighter">
-            About <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500">FactFusion</span>
-          </h1>
-          <p className="text-xl text-blue-100/60 leading-relaxed max-w-3xl mx-auto font-light">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-4xl md:text-5xl font-black tracking-tighter mb-6 leading-[0.9]"
+          >
+            <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-blue-200">
+              About <span className="text-blue-500 inline-block drop-shadow-[0_0_30px_rgba(59,130,246,0.3)]">FactFusion</span>
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-lg text-blue-100/60 max-w-3xl mx-auto leading-relaxed"
+          >
             Empowering crisis response with verified information.
             FactFusion utilizes <span className="text-blue-400 font-medium">advanced AI</span> to validate disaster-related data, providing clarity when it matters most.
-          </p>
-        </motion.div>
+          </motion.p>
+        </header>
 
         {/* Stats/Quick Info Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-16">
