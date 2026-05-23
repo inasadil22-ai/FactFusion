@@ -7,6 +7,13 @@ import random
 from bson.objectid import ObjectId
 from flask_bcrypt import Bcrypt
 
+# Auto-download models if missing
+try:
+    import download_models
+    download_models.main()
+except Exception as e:
+    print(f"[-] Automatic model download check failed: {e}")
+
 # Project Imports
 from config import DevelopmentConfig, ProductionConfig
 from database import initialize_db, mongo
