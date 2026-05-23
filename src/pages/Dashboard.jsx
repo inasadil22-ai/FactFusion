@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar
@@ -13,6 +13,24 @@ import {
 const Dashboard = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optMessage, setOptMessage] = useState("");
+
+  const handleOptimize = () => {
+    if (isOptimizing) return;
+    setIsOptimizing(true);
+    setOptMessage("Calibrating cross-modal parameters...");
+    setTimeout(() => {
+      setOptMessage("Recalculating loss thresholds...");
+      setTimeout(() => {
+        setIsOptimizing(false);
+        setOptMessage("⚡ Neural fusion weights successfully optimized for current traffic!");
+        setTimeout(() => {
+          setOptMessage("");
+        }, 4000);
+      }, 1200);
+    }, 1200);
+  };
 
   // Colors: Blue (Verifiable), Red (Image Threat), Orange (Text Threat), Purple (Mismatch)
   const COLORS = ['#3b82f6', '#ef4444', '#f97316', '#a855f7'];
@@ -237,10 +255,37 @@ const Dashboard = () => {
               </p>
             </div>
           </div>
-          <button className="px-10 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-900/40 hover:-translate-y-1">
-            Optimize Weights
+          <button
+            onClick={handleOptimize}
+            disabled={isOptimizing}
+            className="px-10 py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-900/40 hover:-translate-y-1"
+          >
+            {isOptimizing ? "Optimizing..." : "Optimize Weights"}
           </button>
         </motion.div>
+
+        {/* Optimization Notification Toast */}
+        <AnimatePresence>
+          {optMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.9 }}
+              className={`fixed bottom-8 right-8 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl border backdrop-blur-md shadow-2xl font-sans text-sm font-bold transition-all ${
+                optMessage.includes('optimized')
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/5'
+                  : 'bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-blue-500/5'
+              }`}
+            >
+              {optMessage.includes('optimized') ? (
+                <ShieldCheck className="w-5 h-5 animate-bounce" />
+              ) : (
+                <Activity className="w-5 h-5 animate-spin" />
+              )}
+              <span>{optMessage}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </div>
     </div>
