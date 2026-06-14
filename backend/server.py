@@ -68,7 +68,12 @@ CORS(app, resources={r"/*": {
     "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
     "expose_headers": ["Content-Type"]
 }})
-db = initialize_db(app)
+db = None
+try:
+    db = initialize_db(app)
+except Exception as e:
+    print(f"[-] Database Initialization Error: {e}")
+
 bcrypt = Bcrypt(app)
 
 
@@ -134,6 +139,8 @@ def analyze_content():
 # --- AUTHENTICATION ROUTES ---
 @app.route('/api/signup', methods=['POST'])
 def signup_user():
+    if db is None:
+        return jsonify({'error': 'Backend is running, but database connection failed. Check MONGO_URI.'}), 500
     try:
         data = request.get_json()
         email = data.get('email')
@@ -166,6 +173,8 @@ def signup_user():
 
 @app.route('/api/login', methods=['POST'])
 def login_user():
+    if db is None:
+        return jsonify({'error': 'Backend is running, but database connection failed. Check MONGO_URI.'}), 500
     try:
         data = request.get_json()
         email = data.get('email')
