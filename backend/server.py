@@ -15,6 +15,9 @@ app = Flask(__name__)
 
 # Make ML optional so Railway doesn't crash
 try:
+    if os.environ.get('RAILWAY_ENVIRONMENT'):
+        raise ImportError("Forced LITE mode on Railway to avoid heavy model downloads.")
+        
     import torch  # Check if heavy ML packages are installed
     # Auto-download models if missing
     import download_models
