@@ -6,16 +6,4 @@ python-dotenv==1.0.0
 Werkzeug==2.3.7
 pymongo==4.6.0
 gunicorn==21.2.0
-waitress==2.1.2
-torch
-torchvision
-timm
-albumentations
-google-search-results
-Pillow
-transformers
-numpy
-sentencepiece
-accelerate
-huggingface-hub
 requests==2.31.0

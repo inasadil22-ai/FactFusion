@@ -7,20 +7,46 @@ import random
 from bson.objectid import ObjectId
 from flask_bcrypt import Bcrypt
 
-# Auto-download models if missing
-try:
-    import download_models
-    download_models.main()
-except Exception as e:
-    print(f"[-] Automatic model download check failed: {e}")
-
 # Project Imports
 from config import DevelopmentConfig, ProductionConfig
 from database import initialize_db, mongo
-from multimodal_service import MultimodalService
 
 app = Flask(__name__)
-multimodal_service = MultimodalService()
+
+# Make ML optional so Railway doesn't crash
+try:
+    import torch  # Check if heavy ML packages are installed
+    # Auto-download models if missing
+    import download_models
+    download_models.main()
+    
+    from multimodal_service import MultimodalService
+    multimodal_service = MultimodalService()
+except ImportError as e:
+    print(f"[-] Running in LITE mode (no ML packages): {e}")
+    class MockMultimodalService:
+        def analyze(self, image_path=None, caption=None):
+            return {
+                "active_modalities": {"image": bool(image_path), "text": bool(caption)},
+                "stage_1_image_analysis": {"combined_image_label": "Lite Mode", "semantic_label": "N/A", "forensic_label": "N/A"},
+                "stage_2_text_analysis": {"text_label": "Lite Mode"},
+                "stage_3_multimodal_fusion": {
+                    "multimodal_label": "ML DISABLED (LITE MODE)",
+                    "reasoning": "Railway Lite Mode: Heavy ML packages are not installed."
+                },
+                "verdict": "ML DISABLED",
+                "credibility_score": 0.5,
+                "image_score": 0.0,
+                "xai_insights": {
+                    "explanation": "This server is running without torch/transformers to save memory.",
+                    "audit_path": "Lite Mode",
+                    "text_weights": [],
+                    "text_attributions": [],
+                    "visual_heatmap": None,
+                    "heatmap_status": "UNAVAILABLE"
+                }
+            }
+    multimodal_service = MockMultimodalService()
 
 # Load Configuration
 env = os.environ.get('FLASK_ENV', 'development')
@@ -44,6 +70,13 @@ CORS(app, resources={r"/*": {
 }})
 db = initialize_db(app)
 bcrypt = Bcrypt(app)
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # Helper for MongoDB JSON conversion
 def clean_mongo_record(record):
