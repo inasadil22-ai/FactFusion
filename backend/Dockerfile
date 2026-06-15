@@ -22,4 +22,5 @@ RUN mkdir -p uploads
 # Expose port
 EXPOSE 5000
 
-CMD ["gunicorn", "server:app", "--bind", "0.0.0.0:5000", "--workers", "2"]
+# Use gunicorn with port from env or default 5000
+CMD gunicorn server:app --bind 0.0.0.0:${PORT:-5000} --workers 2
