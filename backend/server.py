@@ -231,11 +231,5 @@ def serve_upload(filename):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    # If deployed on Railway or explicitly set to production
-    if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('FLASK_ENV') == 'production':
-        from waitress import serve
-        print(f"[*] Starting Waitress server on port {port}...")
-        serve(app, host='0.0.0.0', port=port)
-    else:
-        print(f"[*] Starting Flask development server on port {port}...")
-        app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)
+    print(f"[*] Starting Flask development server on port {port}...")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
