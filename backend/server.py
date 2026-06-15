@@ -65,12 +65,19 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-CORS(app, resources={r"/*": {
-    "origins": "*",
-    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-    "expose_headers": ["Content-Type"]
-}})
+# Configure CORS to allow requests from Vercel frontend
+CORS(app, 
+    origins=[
+        "https://fact-fusion-21jjk0zzw-inas-project1.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5000"
+    ],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    expose_headers=["Content-Type"],
+    supports_credentials=True,
+    max_age=3600
+)
 db = None
 try:
     db = initialize_db(app)
