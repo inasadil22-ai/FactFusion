@@ -2,8 +2,10 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 
-# This must be at the top to load the .env file
-load_dotenv()
+# Only load .env in development, not in production
+# Railway sets environment variables directly
+if os.environ.get("FLASK_ENV") != "production":
+    load_dotenv()
 
 class Config:
     """Base configuration settings."""
