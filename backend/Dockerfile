@@ -22,5 +22,4 @@ RUN mkdir -p uploads
 # Expose port
 EXPOSE 5000
 
-# Run with python (server.py uses waitress automatically in production)
-CMD ["python", "server.py"]
+CMD ["gunicorn", "server:app", "--bind", "0.0.0.0:5000", "--workers", "2"]
