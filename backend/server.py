@@ -2,8 +2,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
-import datetime 
-import random
+import datetime
 from bson.objectid import ObjectId
 from flask_bcrypt import Bcrypt
 
@@ -13,25 +12,75 @@ from database import initialize_db, mongo
 
 app = Flask(__name__)
 
+# Load Configuration FIRST
+env = os.environ.get('FLASK_ENV', 'development')
+if env == 'production':
+    app.config.from_object(ProductionConfig)
+else:
+    app.config.from_object(DevelopmentConfig)
+
+# CORS - Allow ALL origins
+CORS(app, resources={r"/*": {
+    "origins": "*",
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+    "supports_credentials": False
+}})
+
+@app.after_request
+def after_request(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
+
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        return response, 200
+
+# Ensure Uploads folder exists
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Initialize Database
+db = None
+try:
+    db = initialize_db(app)
+    print("✅ Database initialized successfully!")
+except Exception as e:
+    print(f"❌ Database Initialization Error: {e}")
+
+# Initialize Bcrypt
+bcrypt = Bcrypt(app)
+
 # Make ML optional so Railway doesn't crash
 try:
     if os.environ.get('RAILWAY_ENVIRONMENT'):
         raise ImportError("Forced LITE mode on Railway to avoid heavy model downloads.")
-        
-    import torch  # Check if heavy ML packages are installed
-    # Auto-download models if missing
+    import torch
     import download_models
     download_models.main()
-    
     from multimodal_service import MultimodalService
     multimodal_service = MultimodalService()
+    print("✅ ML models loaded successfully!")
 except ImportError as e:
     print(f"[-] Running in LITE mode (no ML packages): {e}")
     class MockMultimodalService:
         def analyze(self, image_path=None, caption=None):
             return {
                 "active_modalities": {"image": bool(image_path), "text": bool(caption)},
-                "stage_1_image_analysis": {"combined_image_label": "Lite Mode", "semantic_label": "N/A", "forensic_label": "N/A"},
+                "stage_1_image_analysis": {
+                    "combined_image_label": "Lite Mode",
+                    "semantic_label": "N/A",
+                    "forensic_label": "N/A"
+                },
                 "stage_2_text_analysis": {"text_label": "Lite Mode"},
                 "stage_3_multimodal_fusion": {
                     "multimodal_label": "ML DISABLED (LITE MODE)",
@@ -51,79 +100,58 @@ except ImportError as e:
             }
     multimodal_service = MockMultimodalService()
 
-# Load Configuration
-env = os.environ.get('FLASK_ENV', 'development')
-if env == 'production':
-    app.config.from_object(ProductionConfig)
-else:
-    app.config.from_object(DevelopmentConfig)
-
-# Ensure Uploads folder exists for images
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Configure CORS to allow requests from Vercel frontend
-CORS(app, 
-    origins=[
-        "https://fact-fusion-21jjk0zzw-inas-project1.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:5000"
-    ],
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-    expose_headers=["Content-Type"],
-    supports_credentials=True,
-    max_age=3600
-)
-db = None
-try:
-    db = initialize_db(app)
-except Exception as e:
-    print(f"[-] Database Initialization Error: {e}")
-
-bcrypt = Bcrypt(app)
-
-
-
 # Helper for MongoDB JSON conversion
 def clean_mongo_record(record):
     if record and '_id' in record:
         record['id'] = str(record.pop('_id'))
     return record
 
+# --- HEALTH CHECK ROUTE ---
+@app.route('/', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'running',
+        'database': 'connected' if db is not None else 'disconnected',
+        'message': 'FactFusion API is live!'
+    }), 200
+
+@app.route('/api/health', methods=['GET'])
+def api_health():
+    return jsonify({
+        'status': 'running',
+        'database': 'connected' if db is not None else 'disconnected'
+    }), 200
+
 # --- CORE ANALYSIS & XAI ROUTE ---
 @app.route('/api/v1/analyze', methods=['POST'])
 def analyze_content():
     try:
-        text_content = request.form.get('text', '').strip()  # Strip whitespace so empty string = no text
+        text_content = request.form.get('text', '').strip()
         file = request.files.get('file')
         user_id = request.form.get('user_id')
-        
+
         filename = None
         file_path = None
-        
+
         if file:
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
 
-        # Use the multimodal service (pass None for caption if no text provided)
-        result_data = multimodal_service.analyze(image_path=file_path, caption=text_content if text_content else None)
-        
+        result_data = multimodal_service.analyze(
+            image_path=file_path,
+            caption=text_content if text_content else None
+        )
+
         if "error" in result_data:
             return jsonify(result_data), 500
 
-        # Create Response Payload following the 3-stage structure strictly
         final_response = {
             "stage_1_image_analysis": result_data["stage_1_image_analysis"],
             "stage_2_text_analysis": result_data["stage_2_text_analysis"],
             "stage_3_multimodal_fusion": result_data["stage_3_multimodal_fusion"]
         }
-        
-        # Merge with backward-compatible fields for DB and legacy frontend components
+
         analysis_entry = {
             **final_response,
             "text_snippet": text_content,
@@ -135,33 +163,31 @@ def analyze_content():
             "created_at": datetime.datetime.utcnow(),
             "user_id": user_id
         }
-        
-        # Save to MongoDB
+
         result = db.analysis.insert_one(analysis_entry)
         return jsonify(clean_mongo_record(analysis_entry)), 201
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"Analysis Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # --- AUTHENTICATION ROUTES ---
 @app.route('/api/signup', methods=['POST'])
 def signup_user():
     if db is None:
-        return jsonify({'error': 'Backend is running, but database connection failed. Check MONGO_URI.'}), 500
+        return jsonify({'error': 'Database not connected. Check MONGO_URI.'}), 500
     try:
         data = request.get_json()
         email = data.get('email')
-        incoming_password = data.get('password_hash') 
-        
+        incoming_password = data.get('password_hash')
+
         if not email or not incoming_password:
             return jsonify({'error': 'Missing credentials'}), 400
-        
+
         if db.users.find_one({'email': email}):
             return jsonify({'error': 'User already exists'}), 409
-        
+
         hashed = bcrypt.generate_password_hash(incoming_password).decode('utf-8')
         new_user = {
             'email': email,
@@ -184,14 +210,14 @@ def signup_user():
 @app.route('/api/login', methods=['POST'])
 def login_user():
     if db is None:
-        return jsonify({'error': 'Backend is running, but database connection failed. Check MONGO_URI.'}), 500
+        return jsonify({'error': 'Database not connected. Check MONGO_URI.'}), 500
     try:
         data = request.get_json()
         email = data.get('email')
         password_to_check = data.get('password')
 
         user = db.users.find_one({'email': email})
-        
+
         if user and bcrypt.check_password_hash(user['password_hash'], password_to_check):
             return jsonify({
                 'user': {
@@ -201,7 +227,7 @@ def login_user():
                 },
                 'message': 'Login successful'
             }), 200
-            
+
         return jsonify({'error': 'Invalid email or password'}), 401
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -209,6 +235,8 @@ def login_user():
 # --- HISTORY ROUTES ---
 @app.route('/api/v1/analysis-history', methods=['GET'])
 def list_analysis_history():
+    if db is None:
+        return jsonify({'error': 'Database not connected'}), 500
     try:
         user_id = request.args.get('user_id')
         query = {}
@@ -230,13 +258,12 @@ def delete_analysis_record(id):
     except Exception as e:
         return jsonify({'error': 'Invalid ID format'}), 400
 
-
 # --- SERVE UPLOADED IMAGES ---
 @app.route('/uploads/<filename>')
 def serve_upload(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    print(f"[*] Starting Flask development server on port {port}...")
+    port = int(os.environ.get('PORT', 8080))
+    print(f"[*] Starting Flask on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
