@@ -83,7 +83,7 @@ const Navbar = () => {
         <div className="flex items-center gap-4">
           <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-500/5 border border-blue-500/10">
             <Shield className="w-4 h-4 text-blue-500" />
-            <span className="text-blue-400/80 font-mono text-[10px] tracking-widest uppercase">FYP 2025</span>
+            <span className="text-blue-400/80 font-mono text-[10px] tracking-widest uppercase">FYP 2026</span>
           </div>
 
           {user ? (

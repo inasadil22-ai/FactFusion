@@ -60,10 +60,8 @@ except Exception as e:
 # Initialize Bcrypt
 bcrypt = Bcrypt(app)
 
-# Make ML optional so Railway doesn't crash
+
 try:
-    if os.environ.get('RAILWAY_ENVIRONMENT'):
-        raise ImportError("Forced LITE mode on Railway to avoid heavy model downloads.")
     import torch
     import download_models
     download_models.main()

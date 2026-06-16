@@ -52,7 +52,6 @@ class MultimodalService:
         # Load CLIP for zero-shot image classification
         try:
             print("Loading CLIP zero-shot model (allow download if missing)...")
-            # Remove local_files_only to permit on‑demand download of the model weights
             self.clip = pipeline("zero-shot-image-classification", model="openai/clip-vit-base-patch32", device=0 if torch.cuda.is_available() else -1)
         except Exception as e:
             print(f"Failed to load CLIP: {e}")
@@ -78,10 +77,24 @@ class MultimodalService:
             self.semantic_model = None
             self.forensic_model = None
 
-        # Instantiate XAI Engine
+        # ── SHAP background tensor (optional — enables SHAP over Grad-CAM) ──
+        # Generate assets/shap_background.pt locally once and commit it.
+        # If the file is missing, SHAP is skipped and Grad-CAM is used instead.
+        background_tensor = None
+        bg_path = os.path.join(base_dir, 'assets', 'shap_background.pt')
+        if os.path.exists(bg_path):
+            try:
+                background_tensor = torch.load(bg_path, map_location='cpu')
+                print(f"[XAI] Loaded SHAP background tensor: {background_tensor.shape}")
+            except Exception as e:
+                print(f"[XAI] Could not load SHAP background: {e}")
+
+        # Instantiate XAI Engine — now passes tokenizer + background_tensor
         self.xai_engine = XAIEngine(
-            text_model=self.text_model_service.model if self.text_model_service else None,
-            image_model=self.semantic_model
+            text_model        = self.text_model_service.model     if self.text_model_service else None,
+            image_model       = self.semantic_model,
+            tokenizer         = self.text_model_service.tokenizer if self.text_model_service else None,
+            background_tensor = background_tensor
         )
 
         self.preprocess = A.Compose([
@@ -110,8 +123,7 @@ class MultimodalService:
             normal_label = 'a normal everyday photo with no emergency'
             for i in range(num_patches):
                 for j in range(num_patches):
-                    # Use overlapping patches for smoother heatmap
-                    left = max(0, j * patch_w - patch_w // 2)
+                    left  = max(0, j * patch_w - patch_w // 2)
                     upper = max(0, i * patch_h - patch_h // 2)
                     right = min(w, left + patch_w * 2)
                     lower = min(h, upper + patch_h * 2)
@@ -119,13 +131,11 @@ class MultimodalService:
                     result = self.clip(patch, candidate_labels=[disaster_label, normal_label])
                     score = next((r['score'] for r in result if r['label'] == disaster_label), 0.0)
                     scores[i, j] = score
-            # Normalize scores to 0–1
             s_min, s_max = scores.min(), scores.max()
             if s_max > s_min:
                 scores = (scores - s_min) / (s_max - s_min)
-            # Resize to 224x224 via bilinear interpolation
-            heatmap_tensor = torch.from_numpy(scores).unsqueeze(0).unsqueeze(0)
-            heatmap_resized = F.interpolate(heatmap_tensor, size=(224, 224), mode='bilinear', align_corners=False)
+            heatmap_tensor   = torch.from_numpy(scores).unsqueeze(0).unsqueeze(0)
+            heatmap_resized  = F.interpolate(heatmap_tensor, size=(224, 224), mode='bilinear', align_corners=False)
             return heatmap_resized.squeeze().numpy()
         except Exception as e:
             print(f"CLIP patch heatmap generation failed: {e}")
@@ -162,8 +172,8 @@ class MultimodalService:
                         found_year = int(year_match[0])
                         if found_year < earliest_year: earliest_year = found_year
             age = current_year - earliest_year
-            results['sources'] = sources[:3]
-            results['age_years'] = age
+            results['sources']    = sources[:3]
+            results['age_years']  = age
             results['first_seen'] = earliest_year if earliest_year < current_year else None
             if age > 2: results['warning'] = f'Image first seen around {earliest_year} — {age} years old'
         except Exception as e:
@@ -187,23 +197,22 @@ class MultimodalService:
         try:
             # --- MODALITY DETECTION ---
             has_image = image_path is not None and os.path.exists(image_path)
-            has_text = caption is not None and isinstance(caption, str) and len(caption.strip()) > 0
+            has_text  = caption is not None and isinstance(caption, str) and len(caption.strip()) > 0
 
             # --- STAGE 2: INDEPENDENT IMAGE ANALYSIS ---
             image_analysis = {
-                "semantic_label": "N/A",
-                "forensic_label": "N/A",
+                "semantic_label":    "N/A",
+                "forensic_label":    "N/A",
                 "combined_image_label": "N/A"
             }
-            img_is_disaster = False
+            img_is_disaster    = False
             forensic_uncertain = False
             image_specific_label = None
-            flags = [] # Initialize flags here
+            flags = []
 
             if has_image:
                 img_tensor = self.preprocess_image(image_path)
                 
-                # Predict Semantic Label (Crisis vs Normal)
                 if self.semantic_model is not None:
                     with torch.no_grad():
                         sem_probs = torch.softmax(self.semantic_model(img_tensor), dim=1)[0]
@@ -211,14 +220,11 @@ class MultimodalService:
                 elif self.clip is not None:
                     try:
                         disaster_label = 'a photo showing disaster, flood, fire, earthquake or crisis event'
-                        normal_label = 'a normal everyday photo with no emergency'
+                        normal_label   = 'a normal everyday photo with no emergency'
                         clip_res = self.clip(Image.open(image_path).convert('RGB'), candidate_labels=[disaster_label, normal_label])
                         top = clip_res[0]
                         print(f"CLIP semantic result: {top['label'][:40]} — score={top['score']:.2f}")
-                        if top['label'] == disaster_label and top['score'] > 0.45:
-                            sem_pred = 0  # Real Crisis / Disaster
-                        else:
-                            sem_pred = 1  # Normal / Non-Crisis
+                        sem_pred = 0 if (top['label'] == disaster_label and top['score'] > 0.45) else 1
                     except Exception as e:
                         print(f"CLIP fallback failed: {e}")
                         sem_pred = 1
@@ -226,10 +232,9 @@ class MultimodalService:
                     sem_pred = 1
 
                 image_analysis["semantic_label"] = self.semantic_classes[sem_pred]
-                img_is_disaster = (sem_pred == 0) # Real Crisis / Disaster
+                img_is_disaster = (sem_pred == 0)
 
                 if img_is_disaster:
-                    # Predict Forensic Label (Authentic vs Tampered)
                     if self.forensic_model is not None:
                         with torch.no_grad():
                             for_probs = torch.softmax(self.forensic_model(img_tensor), dim=1)[0]
@@ -240,11 +245,9 @@ class MultimodalService:
                         image_analysis["forensic_label"] = "Authentic"
                         forensic_uncertain = False
                     
-                    # Combined Label Logic
                     for_text = "Manipulated Image" if image_analysis["forensic_label"] == "Tampered" else "Authentic"
                     image_analysis["combined_image_label"] = f"Real Crisis / Disaster — {for_text}"
                     
-                    # CLIP for Mismatch Detection
                     if self.clip:
                         try:
                             candidate_labels = ['earthquake', 'flood', 'tsunami', 'hurricane', 'tornado', 'landslide', 'wildfire', 'storm', 'explosion', 'accident', 'building collapse']
@@ -255,7 +258,7 @@ class MultimodalService:
                     image_analysis["combined_image_label"] = "Normal / Non-Crisis"
 
             # --- STAGE 1: INDEPENDENT TEXT ANALYSIS ---
-            text_analysis = {"text_label": "N/A"}
+            text_analysis  = {"text_label": "N/A"}
             is_unverified_rumor = False
             text_result = {}
             if has_text:
@@ -263,38 +266,33 @@ class MultimodalService:
                 text_analysis["text_label"] = text_result["label"]
                 is_unverified_rumor = (text_result.get("label") == "Unverified Rumor")
 
-            # --- FINAL VERDICT LOGIC (SINGLE vs MULTI) ---
+            # --- FINAL VERDICT LOGIC ---
             multimodal_label = "UNCERTAIN"
             reasoning = "Analysis was inconclusive based on the available signals."
             
             if not has_image and not has_text:
                 multimodal_label = "NO DATA"
                 reasoning = "Please provide image or text input."
-            
             elif has_image and not has_text:
                 multimodal_label = image_analysis["combined_image_label"]
                 reasoning = "Image-only audit completed. Results reflect visual signals only."
-            
             elif has_text and not has_image:
                 multimodal_label = text_analysis["text_label"]
                 reasoning = "Text-only audit completed. Results reflect linguistic integrity only."
-            
             else:
-                # Full Multimodal Fusion
-                temporal_warnings = self.temporal_check(image_path, caption)
+                temporal_warnings  = self.temporal_check(image_path, caption)
                 has_temporal_issue = len(temporal_warnings) > 0
                 
-                # Cross-modal check
                 cross_modal_mismatch = False
                 if image_specific_label and caption and text_analysis["text_label"] == "Informative":
                     if image_specific_label.lower() not in caption.lower():
                         cross_modal_mismatch = True
 
                 flags = []
-                if image_analysis["forensic_label"] == "Tampered": flags.append("Manipulated Image")
-                if has_temporal_issue: flags.append("Old Content")
-                if cross_modal_mismatch: flags.append("Mismatch")
-                if is_unverified_rumor: flags.append("Unverified Rumor")
+                if image_analysis["forensic_label"] == "Tampered":    flags.append("Manipulated Image")
+                if has_temporal_issue:                                 flags.append("Old Content")
+                if cross_modal_mismatch:                               flags.append("Mismatch")
+                if is_unverified_rumor:                                flags.append("Unverified Rumor")
 
                 if len(flags) >= 2:
                     multimodal_label = "HIGH RISK — Multiple Flags Detected"
@@ -326,41 +324,34 @@ class MultimodalService:
                 elif img_is_disaster and image_analysis["forensic_label"] == "Authentic" and text_analysis["text_label"] == "Informative":
                     multimodal_label = "CREDIBLE — Real Disaster, Authentic"
                     reasoning = "Consistent, authentic evidence from both visual and textual modalities."
-            
-            # --- FIX: Issue 1 (Authenticity Gauge Misalignment) & Issue 3 (Keyword Weight Loss) ---
+
+            # --- SCORES & KEYWORD FLAGS ---
             if has_image:
-                if img_is_disaster:
-                    # Scale based on actual forensic evaluation, not just the presence of a disaster
-                    image_score = 0.9 if image_analysis.get("forensic_label") == "Authentic" else 0.1
-                else:
-                    # A non-crisis image is untampered/authentic by default in this pipeline
-                    image_score = 1.0
+                image_score = 0.9 if image_analysis.get("forensic_label") == "Authentic" else (0.1 if img_is_disaster else 1.0)
             else:
                 image_score = 0.0
 
-            # Extract original token/keyword weights from the RoBERTa text model service
-            model_keywords = text_result.get("xai", {}).get("text_weights", []) if has_text else []
-
-            # Build your global process flags
-            flags = []
+            model_keywords     = text_result.get("xai", {}).get("text_weights", []) if has_text else []
+            flags_global       = []
             if has_image and image_analysis.get("forensic_label") in ("Tampered", "Manipulated"):
-                flags.append("Manipulated Image")
+                flags_global.append("Manipulated Image")
             if has_text and text_result.get("is_disaster"):
-                flags.append("Crisis Mention")
-
-            # Merge global flags with fine-grained model keywords, removing duplicates
-            combined_text_weights = list(dict.fromkeys(flags + model_keywords))[:6]
+                flags_global.append("Crisis Mention")
+            combined_text_weights = list(dict.fromkeys(flags_global + model_keywords))[:6]
 
             explanation_text = reasoning
-            audit_path_text = f"[Image: {image_analysis['combined_image_label']}] → [Text: {text_analysis['text_label']}] → [Final: {multimodal_label}]"
+            audit_path_text  = f"[Image: {image_analysis['combined_image_label']}] → [Text: {text_analysis['text_label']}] → [Final: {multimodal_label}]"
 
-            # --- EXECUTE XAI ENGINE ---
+            # ── XAI ENGINE ────────────────────────────────────────────────────
             xai_payload = {
                 "text_attributions": [],
-                "visual_heatmap": None,
-                "heatmap_status": "UNAVAILABLE"
+                "visual_heatmap":    None,
+                "heatmap_status":    "UNAVAILABLE",
+                "heatmap_method":    None,          # NEW: "shap" | "grad-cam" | "clip"
+                "dominant_modality": None,          # NEW: "image" | "text"
             }
 
+            # TEXT ATTRIBUTION — SHAP primary, heuristic fallback (handled inside XAIEngine)
             if has_text:
                 if self.text_model_service and self.text_model_service.tokenizer:
                     token_weights = self.xai_engine.extract_text_attributions(
@@ -369,9 +360,9 @@ class MultimodalService:
                     )
                     xai_payload["text_attributions"] = token_weights
                 else:
-                    # Keyword-based fallback when text model is not loaded
-                    from model_service import ModelLoader
-                    fallback_keywords = self.text_model_service.disaster_keywords + self.text_model_service.uncertain_words
+                    # Keyword fallback when text model not loaded at all
+                    fallback_keywords = getattr(self.text_model_service, 'disaster_keywords', []) + \
+                                        getattr(self.text_model_service, 'uncertain_words', [])
                     words = caption.lower().split()
                     keyword_attrs = []
                     for word in words:
@@ -382,46 +373,60 @@ class MultimodalService:
                             keyword_attrs.append({"token": clean, "weight": 0.3})
                     xai_payload["text_attributions"] = keyword_attrs[:10]
 
+            # IMAGE HEATMAP — SHAP → Grad-CAM → CLIP (handled inside XAIEngine)
             if has_image:
                 if img_is_disaster and self.semantic_model:
-                    # Primary: PyTorch Grad-CAM
-                    try:
-                        target_layer = self.semantic_model.backbone.conv_head
-                        heatmap_matrix = self.xai_engine.generate_gradcam(img_tensor, target_layer)
+                    target_layer = self.semantic_model.backbone.conv_head
+                    heatmap_matrix, status, method = self.xai_engine.get_visual_explanation(
+                        img_tensor, target_layer
+                    )
+                    if heatmap_matrix is not None:
                         xai_payload["visual_heatmap"] = heatmap_matrix.tolist()
-                        xai_payload["heatmap_status"] = "AVAILABLE"
-                    except Exception as e:
-                        xai_payload["heatmap_status"] = f"FAILED: {str(e)}"
+                        xai_payload["heatmap_status"] = status
+                        xai_payload["heatmap_method"] = method
+                    else:
+                        xai_payload["heatmap_status"] = status
                 elif self.clip is not None:
-                    # Fallback: CLIP patch-based saliency heatmap (works without PyTorch models)
+                    # CLIP patch fallback when semantic model not loaded
                     try:
                         heatmap_matrix = self._generate_clip_heatmap(image_path)
                         if heatmap_matrix is not None:
                             xai_payload["visual_heatmap"] = heatmap_matrix.tolist()
-                            xai_payload["heatmap_status"] = "AVAILABLE (CLIP-SALIENCY)"
+                            xai_payload["heatmap_status"] = "AVAILABLE"
+                            xai_payload["heatmap_method"] = "clip"
                         else:
                             xai_payload["heatmap_status"] = "CLIP HEATMAP FAILED"
                     except Exception as e:
                         xai_payload["heatmap_status"] = f"CLIP HEATMAP FAILED: {str(e)}"
 
+            # ── DOMINANT MODALITY (new — which input drove the decision) ──────
+            img_score_xai  = float(np.mean(np.abs(xai_payload["visual_heatmap"])))  \
+                             if xai_payload["visual_heatmap"] else 0.0
+            txt_score_xai  = float(np.mean([abs(t["weight"]) for t in xai_payload["text_attributions"]])) \
+                             if xai_payload["text_attributions"] else 0.0
+            if img_score_xai > 0 or txt_score_xai > 0:
+                xai_payload["dominant_modality"] = "image" if img_score_xai >= txt_score_xai else "text"
+
             return {
                 "active_modalities": {"image": has_image, "text": has_text},
                 "stage_1_image_analysis": image_analysis,
-                "stage_2_text_analysis": text_analysis,
+                "stage_2_text_analysis":  text_analysis,
                 "stage_3_multimodal_fusion": {
                     "multimodal_label": multimodal_label,
-                    "reasoning": reasoning
+                    "reasoning":        reasoning
                 },
-                "verdict": multimodal_label,
+                "verdict":          multimodal_label,
                 "credibility_score": 0.9 if "CREDIBLE" in multimodal_label else (0.1 if "MISINFORMATION" in multimodal_label else 0.5),
-                "image_score": image_score,
+                "image_score":      image_score,
                 "xai_insights": {
-                    "explanation": explanation_text,
-                    "audit_path": audit_path_text,
-                    "text_weights": combined_text_weights,
+                    "explanation":       explanation_text,
+                    "audit_path":        audit_path_text,
+                    "text_weights":      combined_text_weights,
                     "text_attributions": xai_payload["text_attributions"],
-                    "visual_heatmap": xai_payload["visual_heatmap"],
-                    "heatmap_status": xai_payload["heatmap_status"]
+                    "visual_heatmap":    xai_payload["visual_heatmap"],
+                    "heatmap_status":    xai_payload["heatmap_status"],
+                    "heatmap_method":    xai_payload["heatmap_method"],    # NEW
+                    "dominant_modality": xai_payload["dominant_modality"], # NEW
                 }
             }
         except Exception as e:
