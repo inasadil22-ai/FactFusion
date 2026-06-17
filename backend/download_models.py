@@ -1,16 +1,12 @@
 import os
 import requests
 import zipfile
-
+import gdown
 def download_file_from_google_drive(file_id, destination):
-    URL = "https://docs.google.com/uc?export=download"
-    session = requests.Session()
-    response = session.get(URL, params={'id': file_id}, stream=True)
-    token = get_confirm_token(response)
-    if token:
-        params = {'id': file_id, 'confirm': token}
-        response = session.get(URL, params=params, stream=True)
-    save_response_content(response, destination)
+    """Download a file from Google Drive using gdown, handling confirmation page automatically."""
+    url = f"https://drive.google.com/uc?id={file_id}"
+    # quiet=False prints a progress bar; set to True to suppress output
+    gdown.download(url, destination, quiet=False)
 
 def get_confirm_token(response):
     for key, value in response.cookies.items():
@@ -54,9 +50,14 @@ def main():
 
         if filename == 'text_model.zip':
             print("[+] Extracting text_model.zip...")
+            # Verify that the downloaded file is a valid zip archive
+            if not zipfile.is_zipfile(dest_path):
+                os.remove(dest_path)
+                raise RuntimeError("Downloaded file is not a valid zip archive. It may be a Google Drive virus-scan HTML page. Use gdown or ensure the correct file ID.")
             with zipfile.ZipFile(dest_path, 'r') as zip_ref:
                 zip_ref.extractall(models_dir)
             print("[+] Extraction complete.")
+            # Clean up the zip file after successful extraction
             if os.path.exists(dest_path):
                 os.remove(dest_path)
                 print("[+] Cleaned up text_model.zip archive.")
