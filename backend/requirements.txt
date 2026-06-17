@@ -15,8 +15,9 @@ albumentations
 google-search-results
 Pillow
 transformers
-numpy
+numpy<2
 sentencepiece
 accelerate
 huggingface-hub
 shap==0.45.0
+gdown
