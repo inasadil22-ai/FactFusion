@@ -68,8 +68,11 @@ try:
     from multimodal_service import MultimodalService
     multimodal_service = MultimodalService()
     print("✅ ML models loaded successfully!")
-except ImportError as e:
-    print(f"[-] Running in LITE mode (no ML packages): {e}")
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+    print(f"[-] ML LOAD FAILED — full error above: {e}")
+    print(f"[-] Error type: {type(e).__name__}")
     class MockMultimodalService:
         def analyze(self, image_path=None, caption=None):
             return {
