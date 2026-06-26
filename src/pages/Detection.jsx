@@ -150,10 +150,9 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
   );
 };
 
-/// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Global Component Configuration & Threshold Definitions
 // ---------------------------------------------------------------------------
-
 const classifyVerdict = (result) => {
   const verdict = (result?.verdict || '').toLowerCase();
   const score = result?.credibility_score ?? 0;
