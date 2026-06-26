@@ -115,8 +115,7 @@ def clean_mongo_record(record):
 # --- HEALTH CHECK ROUTE ---
 @app.route('/', methods=['GET'])
 def health_check():
-    ml_status = 'mock' if isinstance(multimodal_service, type) and multimodal_service.__name__ == 'MockMultimodalService' else 'loaded'
-    # Simple check: if it has the class name MockMultimodalService it's in lite mode
+    # FIX: Corrected instance vs type check so it accurately reports status
     is_mock = multimodal_service.__class__.__name__ == 'MockMultimodalService'
     return jsonify({
         'status': 'running',
@@ -159,28 +158,30 @@ def analyze_content():
         if "error" in result_data:
             return jsonify(result_data), 500
 
-        final_response = {
-            "stage_1_image_analysis": result_data["stage_1_image_analysis"],
-            "stage_2_text_analysis": result_data["stage_2_text_analysis"],
-            "stage_3_multimodal_fusion": result_data["stage_3_multimodal_fusion"]
-        }
+        # FIX: Ensure all inner deep keys like 'heatmap' are preserved explicitly 
+        # structure stage outputs safely even if running on Mock service
+        stage_1_data = result_data.get("stage_1_image_analysis", {})
+        if "heatmap" not in stage_1_data and result_data.get("xai_insights", {}).get("visual_heatmap"):
+            stage_1_data["heatmap"] = result_data["xai_insights"]["visual_heatmap"]
 
         analysis_entry = {
-            **final_response,
+            "stage_1_image_analysis": stage_1_data,
+            "stage_2_text_analysis": result_data.get("stage_2_text_analysis", {}),
+            "stage_3_multimodal_fusion": result_data.get("stage_3_multimodal_fusion", {}),
             "text_snippet": text_content,
             "image_ref": filename,
-            "verdict": result_data["verdict"],
-            "credibility_score": round(result_data["credibility_score"], 2),
-            "image_score": round(result_data.get("image_score", 0), 2) if result_data.get("image_score") is not None else None,
-            "xai_insights": result_data["xai_insights"],
+            "verdict": result_data.get("verdict", "UNKNOWN"),
+            "credibility_score": round(result_data.get("credibility_score", 0.5), 2),
+            "image_score": round(result_data.get("image_score", 0.0), 2) if result_data.get("image_score") is not None else None,
+            "xai_insights": result_data.get("xai_insights", {}),
             "created_at": datetime.datetime.utcnow(),
             "user_id": user_id
         }
 
         if db is None:
-            return jsonify({'error': 'Database not connected. Cannot save analysis results. Check MONGO_URI in HF Space Secrets.'}), 500
+            return jsonify({'error': 'Database not connected. Cannot save analysis results.'}), 500
 
-        result = db.analysis.insert_one(analysis_entry)
+        db.analysis.insert_one(analysis_entry)
         return jsonify(clean_mongo_record(analysis_entry)), 201
 
     except Exception as e:

@@ -23,7 +23,7 @@ const jetColor = (t) => {
   return [r, g, b];
 };
 
-// FIX: Added 'result' prop to pass the model's response dynamically instead of relying on broken global records
+// FIX: Fixed structural data overlays and blend alpha profiles
 export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
   const canvasRef = useRef(null);
   const [opacity, setOpacity] = useState(0.6);
@@ -52,33 +52,46 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
     img.src = originalImageSrc;
 
     img.onload = () => {
-      canvas.width = matrixW;
-      canvas.height = matrixH;
+      // Scale canvas dimensions cleanly to match display container scale factor
+      canvas.width = 450;
+      canvas.height = 450;
 
-      // Stage 1: Draw source image
-      ctx.drawImage(img, 0, 0, matrixW, matrixH);
+      // Stage 1: Draw source background frame asset cleanly
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // Stage 2: Apply jet-colormap overlay
-      const imgData = ctx.getImageData(0, 0, matrixW, matrixH);
-      const data = imgData.data;
+      // Stage 2: Create offscreen canvas proxy layer to write the heatmap matrix values securely
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = matrixW;
+      offscreenCanvas.height = matrixH;
+      const offscreenCtx = offscreenCanvas.getContext('2d');
+      const heatImgData = offscreenCtx.createImageData(matrixW, matrixH);
+      const data = heatImgData.data;
 
       for (let y = 0; y < matrixH; y++) {
         for (let x = 0; x < matrixW; x++) {
           const raw = heatmapMatrix[y]?.[x] ?? 0;
           const t = (raw - minVal) / range;
+          const pixelIdx = (y * matrixW + x) * 4;
 
-          if (t > 0.1) {
+          if (t > 0.05) {
             const [r, g, b] = jetColor(t);
-            const pixelIdx = (y * matrixW + x) * 4;
             data[pixelIdx] = r;
             data[pixelIdx + 1] = g;
             data[pixelIdx + 2] = b;
             data[pixelIdx + 3] = Math.floor(t * opacity * 255);
+          } else {
+            // Keep background unmasked if activation falls below target floor threshold
+            data[pixelIdx + 3] = 0;
           }
         }
       }
 
-      ctx.putImageData(imgData, 0, 0);
+      offscreenCtx.putImageData(heatImgData, 0, 0);
+
+      // Stage 3: Scale attention weights and composite with source image using canvas alpha context
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = 1.0;
+      ctx.drawImage(offscreenCanvas, 0, 0, canvas.width, canvas.height);
     };
   }, [originalImageSrc, heatmapMatrix, opacity]);
 
@@ -116,7 +129,7 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
 
         {/* Jet Colormap Bar */}
         <div
-          className="h-2 rounded-full w-full"
+          className="h-2 rounded-full w-full mb-2"
           style={{
             background: 'linear-gradient(to right, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000)',
           }}
@@ -138,14 +151,36 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
 };
 
 // ---------------------------------------------------------------------------
+// Global Component Configuration & Threshold Definitions
+// ---------------------------------------------------------------------------
+const SCORE_THRESHOLDS = {
+  HIGH: 0.75, // Credible / Safe Threshold
+  MID: 0.40,  // Suspicious / Warning Threshold
+};
+
+const classifyVerdict = (result) => {
+  const verdict = (result?.verdict || '').toLowerCase();
+  const score = result?.credibility_score ?? 0;
+
+  const isOOD = verdict.includes('ood') || verdict.includes('out of domain');
+  const isCredible = !isOOD && score >= SCORE_THRESHOLDS.HIGH;
+  const isSuspicious = !isOOD && score >= SCORE_THRESHOLDS.MID && score < SCORE_THRESHOLDS.HIGH;
+  const isHighRisk = !isOOD && score < SCORE_THRESHOLDS.MID;
+
+  return { isCredible, isHighRisk, isSuspicious, isOOD };
+};
+
+// ---------------------------------------------------------------------------
 // Verdict helpers
 // ---------------------------------------------------------------------------
 const getScoreColor = (score, verdictType) => {
-  if (verdictType === 'ood' || verdictType === 'OOD') return '#94a3b8';
+  const type = (verdictType || '').toLowerCase();
+  if (type === 'ood' || type === 'out of domain') return '#94a3b8'; // Slate grey fallback for Out of Domain data
+
   const val = score ?? 0;
-  if (val >= SCORE_THRESHOLDS.HIGH) return '#10b981';
-  if (val >= SCORE_THRESHOLDS.MID) return '#f59e0b';
-  return '#ef4444';
+  if (val >= SCORE_THRESHOLDS.HIGH) return '#10b981'; // Emerald green
+  if (val >= SCORE_THRESHOLDS.MID) return '#f59e0b';  // Amber yellow
+  return '#ef4444';                                    // Crimson red
 };
 
 // ---------------------------------------------------------------------------
@@ -337,8 +372,11 @@ const Detection = () => {
                         alt="Preview"
                       />
                       <button
-                        onClick={removeFile}
-                        className="absolute top-8 right-8 p-3 bg-red-500 text-white rounded-full"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Avoid triggering file selection click again
+                          removeFile();
+                        }}
+                        className="absolute top-8 right-8 p-3 bg-red-500 text-white rounded-full transition-transform hover:scale-105"
                       >
                         <X size={20} />
                       </button>
@@ -353,7 +391,7 @@ const Detection = () => {
             <button
               onClick={handleAnalyze}
               disabled={loading}
-              className="px-20 py-6 rounded-full bg-blue-600 text-white font-black uppercase tracking-[0.3em] disabled:opacity-50"
+              className="px-20 py-6 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.3em] disabled:opacity-50 transition-all shadow-lg shadow-blue-600/20"
             >
               {loading ? 'Neural Core Processing…' : 'Initiate Detection'}
             </button>
@@ -372,6 +410,7 @@ const Detection = () => {
               {/* Main Verdict Card */}
               {(() => {
                 const { isCredible, isHighRisk, isSuspicious, isOOD } = classifyVerdict(result);
+
                 const cardStyles = isCredible
                   ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
                   : isHighRisk
@@ -388,6 +427,7 @@ const Detection = () => {
                       ? 'bg-amber-500/20 text-amber-400'
                       : 'bg-gray-500/20 text-gray-400';
 
+                // Added fallback support for OOD (Out of Domain) scenarios safely
                 const VerdictIcon = isCredible
                   ? ShieldCheck
                   : isHighRisk
@@ -395,30 +435,38 @@ const Detection = () => {
                     : ShieldAlert;
 
                 return (
-                  <div className={`p-6 rounded-[2.5rem] border-2 flex items-center justify-between gap-8 ${cardStyles}`}>
-                    <div className="flex items-center gap-6">
-                      <div className={`p-5 rounded-[1.5rem] ${iconContainerStyles}`}>
+                  <div className={`p-6 rounded-[2.5rem] border-2 flex flex-col md:flex-row items-center justify-between gap-8 ${cardStyles}`}>
+                    <div className="flex items-center gap-6 w-full md:w-auto">
+                      <div className={`p-5 rounded-[1.5rem] flex-shrink-0 ${iconContainerStyles}`}>
                         <VerdictIcon size={40} />
                       </div>
                       <div>
-                        <h3 className="text-3xl font-bold">{result.verdict || 'Analysis Result'}</h3>
-                        <p className="text-white/40 font-bold uppercase text-xs">
+                        <h3 className="text-3xl font-bold tracking-tight text-white">
+                          {result.verdict || 'Analysis Result'}
+                        </h3>
+                        <p className="text-white/40 font-bold uppercase text-xs mt-1">
                           Score: {((result.credibility_score ?? 0) * 100).toFixed(1)}%
                         </p>
                       </div>
                     </div>
 
-                    {/* Render Visualizer passing dynamic heatmap payload from the model */}
+                    {/* Dynamic Grad-CAM / Attention Matrix Interface overlay */}
                     {result.stage_1_image_analysis?.heatmap && (
-                      <XAIVisualizer
-                        originalImageSrc={previewUrl}
-                        heatmapMatrix={result.stage_1_image_analysis.heatmap}
-                        result={result}
-                      />
+                      <div className="w-full md:w-auto flex justify-center">
+                        <XAIVisualizer
+                          originalImageSrc={previewUrl}
+                          heatmapMatrix={result.stage_1_image_analysis.heatmap}
+                          result={result}
+                        />
+                      </div>
                     )}
 
-                    <button onClick={downloadPDF} className="p-4 bg-white/10 rounded-2xl flex-shrink-0 self-start md:self-center">
-                      <Download />
+                    <button
+                      onClick={downloadPDF}
+                      className="p-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl flex-shrink-0 self-end md:self-center transition-all"
+                      title="Download Analysis Report"
+                    >
+                      <Download size={20} />
                     </button>
                   </div>
                 );
@@ -535,7 +583,8 @@ const Detection = () => {
                           dataKey="value"
                           stroke="none"
                         >
-                          <Cell fill={getScoreColor(result.credibility_score, result.verdict_type)} />
+                          {/* FIX: Changed result.verdict_type to result.verdict to match your backend model's response */}
+                          <Cell fill={getScoreColor(result.credibility_score, result.verdict)} />
                           <Cell fill="#ffffff05" />
                         </Pie>
                       </PieChart>
@@ -567,7 +616,8 @@ const Detection = () => {
                             dataKey="value"
                             stroke="none"
                           >
-                            <Cell fill={getScoreColor(result.image_score, result.verdict_type)} />
+                            {/* FIX: Changed result.verdict_type to result.verdict here as well */}
+                            <Cell fill={getScoreColor(result.image_score, result.verdict)} />
                             <Cell fill="#ffffff05" />
                           </Pie>
                         </PieChart>
