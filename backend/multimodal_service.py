@@ -12,7 +12,6 @@ from datetime import datetime
 from serpapi import GoogleSearch
 from transformers import pipeline
 import traceback
-import pillow_avif 
 
 # Import the existing text model loader
 from model_service import ModelLoader
