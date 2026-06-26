@@ -1,0 +1,30 @@
+# Sensitive Environment Variables (Security)
+.env
+.env.local
+.env.production
+.env.development
+
+# Python caches and local virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Frontend build files (agar local par build banayi ho)
+dist/
+node_modules/
+
+# Local data/uploads (taake aapki testing files HF par na jayein)
+uploads/
+models/

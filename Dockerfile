@@ -2,28 +2,33 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system-level dependencies needed by OpenCV
+# System dependencies for OpenCV / Headless environment
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libgl1 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements straight from root level
+# 1. Sabse pehle requirements copy karke install karein
 COPY requirements.txt .
-
-# Clear and standard installation of all requirements
-# (Make sure opencv-python-headless and gunicorn are inside requirements.txt)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all backend files into container workspace
-COPY . .
+# 2. Poora backend folder container ke andar copy karein
+COPY backend/ ./backend/
+COPY README.md .
+COPY config.py .
+COPY database.py .
+COPY model_service.py .
+COPY multimodal_service.py .
+COPY xai_service.py .
+COPY download_models.py .
+COPY settings.json .
+COPY test_atlas.py .
 
-# Create uploads directory
-RUN mkdir -p /app/uploads
+# 3. Code execution path set karein (Taake python ko server module mil jaye)
+ENV PYTHONPATH=/app/backend:/app
 
-# HF Spaces requires port 7860
 EXPOSE 7860
 
-# Run via gunicorn with safe timeouts
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--timeout", "300", "--workers", "1", "--threads", "4", "server:app"]
+# 4. Gunicorn ko exact path batayein ke server:app backend folder ke andar hai
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--timeout", "300", "--workers", "1", "--threads", "4", "backend.server:app"]
