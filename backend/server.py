@@ -18,32 +18,20 @@ if env == 'production':
 else:
     app.config.from_object(DevelopmentConfig)
 
+# Clean CORS Implementation - REMOVED manual hooks below
 CORS(app, resources={
     r"/api/*": {
         "origins": [
             r"https://fact-fusion-.*\.vercel\.app", 
             "http://localhost:5173"
         ],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+    },
+    r"/uploads/*": {
+        "origins": ["https://fact-fusion-.*\.vercel\.app", "http://localhost:5173"]
     }
 })
-
-@app.after_request
-def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    return response
-
-@app.before_request
-def handle_options():
-    if request.method == "OPTIONS":
-        response = jsonify({'status': 'ok'})
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        return response, 200
 
 # Ensure Uploads folder exists — use absolute path so gunicorn cwd doesn't matter
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
@@ -60,7 +48,6 @@ except Exception as e:
 
 # Initialize Bcrypt
 bcrypt = Bcrypt(app)
-
 
 try:
     import torch
@@ -106,16 +93,24 @@ except Exception as e:
     multimodal_service = MockMultimodalService()
     print("[⚠] Running in LITE (mock) mode — ML features disabled.")
 
-# Helper for MongoDB JSON conversion
+# Helper for MongoDB JSON conversion - Safely converts ObjectIds and Datetimes
 def clean_mongo_record(record):
-    if record and '_id' in record:
+    if not record:
+        return record
+    if '_id' in record:
         record['id'] = str(record.pop('_id'))
+    
+    # Standardize datetime strings so jsonify doesn't crash
+    for key, value in record.items():
+        if isinstance(value, datetime.datetime):
+            record[key] = value.isoformat()
+        elif isinstance(value, dict):
+            record[key] = clean_mongo_record(value)
     return record
 
 # --- HEALTH CHECK ROUTE ---
 @app.route('/', methods=['GET'])
 def health_check():
-    # FIX: Corrected instance vs type check so it accurately reports status
     is_mock = multimodal_service.__class__.__name__ == 'MockMultimodalService'
     return jsonify({
         'status': 'running',
@@ -158,8 +153,6 @@ def analyze_content():
         if "error" in result_data:
             return jsonify(result_data), 500
 
-        # FIX: Ensure all inner deep keys like 'heatmap' are preserved explicitly 
-        # structure stage outputs safely even if running on Mock service
         stage_1_data = result_data.get("stage_1_image_analysis", {})
         if "heatmap" not in stage_1_data and result_data.get("xai_insights", {}).get("visual_heatmap"):
             stage_1_data["heatmap"] = result_data["xai_insights"]["visual_heatmap"]
