@@ -1,4 +1,7 @@
-# Ignore backend dependencies only
+# Backend dependencies
 venv/
 __pycache__/
 *.pyc
+media/
+uploads/
+.venv/
