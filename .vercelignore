@@ -1,10 +1,4 @@
-requirements.txt
-Dockerfile
-Procfile
-server.py
-requirements-local.txt
-test_image_analyze.py
-test_ood.py
-update-api-urls.sh
-*.py
-*.ipynb
+# Ignore backend dependencies only
+venv/
+__pycache__/
+*.pyc
