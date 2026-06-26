@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from 'ajax';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import {
@@ -16,14 +16,12 @@ import { classifyVerdict, SCORE_THRESHOLDS } from '../utils/verdict';
 // XAI Heatmap Visualizer
 // ---------------------------------------------------------------------------
 const jetColor = (t) => {
-  // t in [0, 1] → [R, G, B] following jet colormap
   const r = Math.max(0, Math.min(255, Math.round(255 * (1.5 - Math.abs(4 * t - 3)))));
   const g = Math.max(0, Math.min(255, Math.round(255 * (1.5 - Math.abs(4 * t - 2)))));
   const b = Math.max(0, Math.min(255, Math.round(255 * (1.5 - Math.abs(4 * t - 1)))));
   return [r, g, b];
 };
 
-// FIX: Fixed structural data overlays and blend alpha profiles
 export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
   const canvasRef = useRef(null);
   const [opacity, setOpacity] = useState(0.6);
@@ -52,14 +50,10 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
     img.src = originalImageSrc;
 
     img.onload = () => {
-      // Scale canvas dimensions cleanly to match display container scale factor
       canvas.width = 450;
       canvas.height = 450;
-
-      // Stage 1: Draw source background frame asset cleanly
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // Stage 2: Create offscreen canvas proxy layer to write the heatmap matrix values securely
       const offscreenCanvas = document.createElement('canvas');
       offscreenCanvas.width = matrixW;
       offscreenCanvas.height = matrixH;
@@ -80,22 +74,18 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
             data[pixelIdx + 2] = b;
             data[pixelIdx + 3] = Math.floor(t * opacity * 255);
           } else {
-            // Keep background unmasked if activation falls below target floor threshold
             data[pixelIdx + 3] = 0;
           }
         }
       }
 
       offscreenCtx.putImageData(heatImgData, 0, 0);
-
-      // Stage 3: Scale attention weights and composite with source image using canvas alpha context
       ctx.imageSmoothingEnabled = true;
       ctx.globalAlpha = 1.0;
       ctx.drawImage(offscreenCanvas, 0, 0, canvas.width, canvas.height);
     };
   }, [originalImageSrc, heatmapMatrix, opacity]);
 
-  // Dynamic values mapping directly from backend model results
   const semanticScore = result?.stage_2_text_analysis?.semantic_integrity ?? result?.credibility_score ?? 0.5;
   const visualScore = result?.stage_1_image_analysis?.visual_authenticity ?? result?.image_score ?? 0.9;
   const fusionScore = result?.stage_3_multimodal_fusion?.mismatch_score ?? result?.fusion_score ?? 0.7;
@@ -111,7 +101,6 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
       </div>
 
       <div className="w-full max-w-[224px] space-y-1">
-        {/* Dynamic Labels Header connected directly to the current model output */}
         <div className="flex justify-between text-[10px] font-semibold uppercase tracking-widest">
           <div className="flex flex-col items-start text-zinc-500">
             <span>Low (Text)</span>
@@ -127,7 +116,6 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
           </div>
         </div>
 
-        {/* Jet Colormap Bar */}
         <div
           className="h-2 rounded-full w-full mb-2"
           style={{
@@ -135,7 +123,6 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
           }}
         />
 
-        {/* Opacity Slider */}
         <label className="text-xs font-semibold text-zinc-400 flex justify-between pt-1">
           <span>Overlay intensity:</span>
           <span>{Math.round(opacity * 100)}%</span>
@@ -151,31 +138,16 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
 };
 
 // ---------------------------------------------------------------------------
-// Global Component Configuration & Threshold Definitions
-// ---------------------------------------------------------------------------
-const classifyVerdict = (result) => {
-  const verdict = (result?.verdict || '').toLowerCase();
-  const score = result?.credibility_score ?? 0;
-
-  const isOOD = verdict.includes('ood') || verdict.includes('out of domain');
-  const isCredible = !isOOD && score >= SCORE_THRESHOLDS.HIGH;
-  const isSuspicious = !isOOD && score >= SCORE_THRESHOLDS.MID && score < SCORE_THRESHOLDS.HIGH;
-  const isHighRisk = !isOOD && score < SCORE_THRESHOLDS.MID;
-
-  return { isCredible, isHighRisk, isSuspicious, isOOD };
-};
-
-// ---------------------------------------------------------------------------
-// Verdict helpers
+// Verdict Helpers
 // ---------------------------------------------------------------------------
 const getScoreColor = (score, verdictType) => {
   const type = (verdictType || '').toLowerCase();
-  if (type === 'ood' || type === 'out of domain') return '#94a3b8'; // Slate grey fallback for Out of Domain data
+  if (type === 'ood' || type === 'out of domain') return '#94a3b8';
 
   const val = score ?? 0;
-  if (val >= SCORE_THRESHOLDS.HIGH) return '#10b981'; // Emerald green
-  if (val >= SCORE_THRESHOLDS.MID) return '#f59e0b';  // Amber yellow
-  return '#ef4444';                                    // Crimson red
+  if (val >= SCORE_THRESHOLDS.HIGH) return '#10b981';
+  if (val >= SCORE_THRESHOLDS.MID) return '#f59e0b';
+  return '#ef4444';
 };
 
 // ---------------------------------------------------------------------------
@@ -280,7 +252,6 @@ const Detection = () => {
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto">
-        {/* Header */}
         <header className="mb-12">
           <motion.div
             initial={{ opacity: 0 }}
@@ -309,7 +280,6 @@ const Detection = () => {
           </motion.h1>
         </header>
 
-        {/* Tabs */}
         <nav className="flex flex-wrap gap-4 mb-10">
           {tabs.map((tab) => (
             <button
@@ -325,7 +295,6 @@ const Detection = () => {
           ))}
         </nav>
 
-        {/* Input UI */}
         <section className="bg-white/[0.03] border border-white/10 rounded-[3rem] p-10 backdrop-blur-3xl shadow-2xl mb-12">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
             {(activeTab === 'text' || activeTab === 'multimodal') && (
@@ -368,7 +337,7 @@ const Detection = () => {
                       />
                       <button
                         onClick={(e) => {
-                          e.stopPropagation(); // Avoid triggering file selection click again
+                          e.stopPropagation();
                           removeFile();
                         }}
                         className="absolute top-8 right-8 p-3 bg-red-500 text-white rounded-full transition-transform hover:scale-105"
@@ -393,7 +362,6 @@ const Detection = () => {
           </div>
         </section>
 
-        {/* Result UI */}
         <AnimatePresence>
           {result && (
             <motion.div
@@ -402,9 +370,8 @@ const Detection = () => {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-12"
             >
-              {/* Main Verdict Card */}
               {(() => {
-                const { isCredible, isHighRisk, isSuspicious, isOOD } = classifyVerdict(result);
+                const { isCredible, isHighRisk, isSuspicious } = classifyVerdict(result);
 
                 const cardStyles = isCredible
                   ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
@@ -422,7 +389,6 @@ const Detection = () => {
                       ? 'bg-amber-500/20 text-amber-400'
                       : 'bg-gray-500/20 text-gray-400';
 
-                // Added fallback support for OOD (Out of Domain) scenarios safely
                 const VerdictIcon = isCredible
                   ? ShieldCheck
                   : isHighRisk
@@ -445,7 +411,6 @@ const Detection = () => {
                       </div>
                     </div>
 
-                    {/* Dynamic Grad-CAM / Attention Matrix Interface overlay */}
                     {result.stage_1_image_analysis?.heatmap && (
                       <div className="w-full md:w-auto flex justify-center">
                         <XAIVisualizer
@@ -467,9 +432,7 @@ const Detection = () => {
                 );
               })()}
 
-              {/* Pipeline Tracking */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Stage 1: Text */}
                 <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${result.active_modalities?.text
                   ? 'bg-indigo-500/10 border-indigo-500/40 shadow-[0_0_30px_rgba(99,102,241,0.15)]'
                   : 'bg-white/[0.03] border-white/10 opacity-40'
@@ -499,7 +462,6 @@ const Detection = () => {
                   </div>
                 </div>
 
-                {/* Stage 2: Image */}
                 <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${result.active_modalities?.image
                   ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_30px_rgba(59,130,246,0.15)]'
                   : 'bg-white/[0.03] border-white/10 opacity-40'
@@ -529,7 +491,6 @@ const Detection = () => {
                   </div>
                 </div>
 
-                {/* Stage 3: Multimodal Fusion */}
                 <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${result.active_modalities?.image && result.active_modalities?.text
                   ? 'bg-purple-500/10 border-purple-500/40 shadow-[0_0_30px_rgba(168,85,247,0.15)]'
                   : 'bg-white/[0.03] border-white/10 opacity-40'
@@ -556,9 +517,7 @@ const Detection = () => {
                 </div>
               </div>
 
-              {/* Gauges */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Gauge 1: Semantic Integrity */}
                 <div className="bg-white/[0.03] border border-white/10 rounded-[2rem] p-8 text-center relative">
                   <h4 className="text-sm font-bold uppercase text-blue-400 tracking-widest mb-6">
                     Semantic Integrity
@@ -578,7 +537,6 @@ const Detection = () => {
                           dataKey="value"
                           stroke="none"
                         >
-                          {/* FIX: Changed result.verdict_type to result.verdict to match your backend model's response */}
                           <Cell fill={getScoreColor(result.credibility_score, result.verdict)} />
                           <Cell fill="#ffffff05" />
                         </Pie>
@@ -590,7 +548,6 @@ const Detection = () => {
                   </div>
                 </div>
 
-                {/* Gauge 2: Visual Authenticity */}
                 {result.image_score != null && (
                   <div className="bg-white/[0.03] border border-white/10 rounded-[3rem] p-12 text-center relative">
                     <h4 className="text-sm font-bold uppercase text-purple-400 tracking-widest mb-10">
@@ -611,7 +568,6 @@ const Detection = () => {
                             dataKey="value"
                             stroke="none"
                           >
-                            {/* FIX: Changed result.verdict_type to result.verdict here as well */}
                             <Cell fill={getScoreColor(result.image_score, result.verdict)} />
                             <Cell fill="#ffffff05" />
                           </Pie>
@@ -625,7 +581,6 @@ const Detection = () => {
                 )}
               </div>
 
-              {/* XAI Evidence CTA */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
