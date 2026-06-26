@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'ajax';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import {
   UploadCloud, Zap, FileText, Image as ImageIcon,
-  Layers, ShieldCheck, X, Fingerprint,
   Activity, Target, AlertTriangle, Download, ShieldAlert
 } from 'lucide-react';
 import jsPDF from 'jspdf';
