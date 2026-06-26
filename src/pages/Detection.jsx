@@ -150,13 +150,9 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
   );
 };
 
-// ---------------------------------------------------------------------------
+/// ---------------------------------------------------------------------------
 // Global Component Configuration & Threshold Definitions
 // ---------------------------------------------------------------------------
-const SCORE_THRESHOLDS = {
-  HIGH: 0.75, // Credible / Safe Threshold
-  MID: 0.40,  // Suspicious / Warning Threshold
-};
 
 const classifyVerdict = (result) => {
   const verdict = (result?.verdict || '').toLowerCase();
