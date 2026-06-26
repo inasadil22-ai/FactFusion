@@ -1,11 +1,11 @@
 // src/utils/verdict.js
 
 export const SCORE_THRESHOLDS = {
-    HIGH: 0.7,
-    MID: 0.45,
+    HIGH: 0.75,
+    MID: 0.40,
     // Add lowercase versions for backward compatibility
-    high: 0.7,
-    mid: 0.45,
+    high: 0.75,
+    mid: 0.40,
 };
 
 export const getVerdictCategory = (verdict) => {
