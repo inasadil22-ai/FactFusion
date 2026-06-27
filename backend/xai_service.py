@@ -199,20 +199,29 @@ class XAIEngine:
         device = next(self.text_model.parameters()).device
         inputs = {k: v.to(device) for k, v in inputs.items()}
 
-        with torch.no_grad():
-            outputs = self.text_model(**inputs)
-
-        # Extract raw logits to map back to individual token components
-        logits = F.softmax(outputs.logits, dim=-1)
         tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0].cpu())
+
+        # Use gradient magnitude per token as importance proxy
+        # Much better signal than position-decay dummy weights
+        embed_layer = self.text_model.roberta.embeddings.word_embeddings
+        embeds = embed_layer(inputs["input_ids"]).detach().requires_grad_(True)
+        out2 = self.text_model(inputs_embeds=embeds,
+                               attention_mask=inputs.get("attention_mask"))
+        score = out2.logits[0, out2.logits.argmax(dim=1).item()]
+        score.backward()
+
+        grad_mag = embeds.grad[0].norm(dim=-1).detach().cpu().numpy()
 
         attributions = []
         for idx, token in enumerate(tokens):
             if token in ['<s>', '</s>', '<pad>', '<unk>']:
                 continue
-            # Original position-weighted heuristic — unchanged
-            max_logit = logits[0].max().item()
-            weight    = float(max_logit * (1.0 / (idx + 1)))
-            attributions.append({"token": token.replace('Ġ', ''), "weight": round(weight, 3)})
+            attributions.append({"token": token.replace('Ġ', ''), "weight": round(float(grad_mag[idx]), 4)})
+
+        # Normalise to 0-1 so frontend gauge works correctly
+        if attributions:
+            max_w = max(a["weight"] for a in attributions) or 1.0
+            for a in attributions:
+                a["weight"] = round(a["weight"] / max_w, 3)
 
         return sorted(attributions, key=lambda x: x["weight"], reverse=True)[:6]

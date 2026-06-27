@@ -244,7 +244,7 @@ class MultimodalService:
                         for_conf, for_pred = for_probs.max(0)
                         for_conf_val = for_conf.item()          # real confidence
                         image_analysis["forensic_label"] = self.forensic_classes[for_pred.item()]
-                        forensic_uncertain = for_conf_val < 0.70
+                        forensic_uncertain = for_conf_val < 0.55
                     else:
                         image_analysis["forensic_label"] = "Authentic"
                         forensic_uncertain = False
