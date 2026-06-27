@@ -1,6 +1,7 @@
 FROM python:3.10-slim
 
 WORKDIR /app
+ARG CACHE_BUST=3
 
 # System dependencies for OpenCV / Headless environment
 RUN apt-get update && apt-get install -y --no-install-recommends \
