@@ -10,7 +10,7 @@ import {
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { classifyVerdict, SCORE_THRESHOLDS } from '../utils/verdict';
-import { FileText, Image as ImageIcon, Layers } from 'lucide-react';
+
 
 // ---------------------------------------------------------------------------
 // XAI Heatmap Visualizer
