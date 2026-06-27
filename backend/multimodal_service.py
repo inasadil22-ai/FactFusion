@@ -227,7 +227,8 @@ class MultimodalService:
                         clip_res = self.clip(Image.open(image_path).convert('RGB'), candidate_labels=[disaster_label, normal_label])
                         top = clip_res[0]
                         print(f"CLIP semantic result: {top['label'][:40]} — score={top['score']:.2f}")
-                        sem_pred = 0 if (top['label'] == disaster_label and top['score'] > 0.45) else 1
+                        sem_pred     = 0 if (top['label'] == disaster_label and top['score'] > 0.45) else 1
+                        sem_conf_val = top['score']   # real CLIP confidence
                     except Exception as e:
                         print(f"CLIP fallback failed: {e}")
                         sem_pred = 1
@@ -274,6 +275,7 @@ class MultimodalService:
             # --- FINAL VERDICT LOGIC ---
             multimodal_label = "UNCERTAIN"
             reasoning = "Analysis was inconclusive based on the available signals."
+            fusion_score = None  # only meaningful when both modalities are present (set below)
             
             if not has_image and not has_text:
                 multimodal_label = "NO DATA"
@@ -329,6 +331,12 @@ class MultimodalService:
                 elif img_is_disaster and image_analysis["forensic_label"] == "Authentic" and text_analysis["text_label"] == "Informative":
                     multimodal_label = "CREDIBLE — Real Disaster, Authentic"
                     reasoning = "Consistent, authentic evidence from both visual and textual modalities."
+
+                # fusion_score: how much the two modalities agree, based on the same
+                # flags the verdict above was just decided from (0 flags = full agreement,
+                # each flag chips away at agreement). Not a separate invented signal —
+                # just the existing fusion logic expressed as a number instead of only a label.
+                fusion_score = round(max(0.0, 1.0 - 0.25 * len(flags)), 3)
 
             # --- SCORES from real model confidences ---
             if has_image:
@@ -440,11 +448,13 @@ class MultimodalService:
                 "stage_2_text_analysis":  text_analysis,
                 "stage_3_multimodal_fusion": {
                     "multimodal_label": multimodal_label,
-                    "reasoning":        reasoning
+                    "reasoning":        reasoning,
+                    "fusion_score":     fusion_score  # NEW: real agreement score, only set when both modalities present
                 },
                 "verdict":           multimodal_label,
                 "credibility_score": credibility_score,
                 "image_score":       image_score,
+                "fusion_score":      fusion_score,  # NEW: surfaced at top level too, for convenience
                 "xai_insights": {
                     "explanation":       explanation_text,
                     "audit_path":        audit_path_text,

@@ -172,6 +172,7 @@ def analyze_content():
             "verdict": result_data["verdict"],
             "credibility_score": round(result_data["credibility_score"], 2),
             "image_score": round(result_data.get("image_score", 0), 2) if result_data.get("image_score") is not None else None,
+            "fusion_score": round(result_data.get("fusion_score", 0), 2) if result_data.get("fusion_score") is not None else None,
             "xai_insights": result_data["xai_insights"],
             "created_at": datetime.datetime.utcnow(),
             "user_id": user_id

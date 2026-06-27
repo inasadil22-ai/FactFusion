@@ -87,9 +87,9 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
     };
   }, [originalImageSrc, heatmapMatrix, opacity]);
 
-  const semanticScore = result?.stage_2_text_analysis?.semantic_integrity ?? result?.credibility_score ?? 0.5;
-  const visualScore = result?.stage_1_image_analysis?.visual_authenticity ?? result?.image_score ?? 0.9;
-  const fusionScore = result?.stage_3_multimodal_fusion?.mismatch_score ?? result?.fusion_score ?? 0.7;
+  const semanticScore = result?.credibility_score ?? 0.5;
+  const visualScore = result?.image_score ?? 0.9;
+  const fusionScore = result?.stage_3_multimodal_fusion?.fusion_score ?? result?.fusion_score ?? 0.7;
 
   return (
     <div className="flex flex-col items-center gap-4 bg-zinc-900/40 p-4 rounded-xl border border-zinc-800">

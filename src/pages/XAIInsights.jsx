@@ -66,10 +66,11 @@ const XAIInsights = () => {
 
         const res = await axios.get(url);
         const rawData = Array.isArray(res.data) ? res.data : [];
-        const withXai = rawData.filter(r => r && r.xai_insights).slice(0, 15);
+        const hasXai = (r) => r && r.xai_insights && Object.keys(r.xai_insights).length > 0;
+        const withXai = rawData.filter(hasXai).slice(0, 15);
 
         // FIX 3: Warn in console if records were silently trimmed
-        if (rawData.filter(r => r?.xai_insights).length > 15) {
+        if (rawData.filter(hasXai).length > 15) {
           console.warn(`[XAIInsights] ${rawData.length} records received — showing latest 15 only.`);
         }
 
