@@ -209,6 +209,8 @@ class MultimodalService:
             forensic_uncertain = False
             image_specific_label = None
             flags = []
+            sem_conf_val = 0.5   # real semantic model confidence (filled below)
+            for_conf_val = 0.5   # real forensic model confidence (filled below)
 
             if has_image:
                 img_tensor = self.preprocess_image(image_path)
@@ -216,7 +218,8 @@ class MultimodalService:
                 if self.semantic_model is not None:
                     with torch.no_grad():
                         sem_probs = torch.softmax(self.semantic_model(img_tensor), dim=1)[0]
-                    sem_pred = sem_probs.argmax().item()
+                    sem_pred     = sem_probs.argmax().item()
+                    sem_conf_val = sem_probs[sem_pred].item()   # real confidence
                 elif self.clip is not None:
                     try:
                         disaster_label = 'a photo showing disaster, flood, fire, earthquake or crisis event'
@@ -239,11 +242,13 @@ class MultimodalService:
                         with torch.no_grad():
                             for_probs = torch.softmax(self.forensic_model(img_tensor), dim=1)[0]
                         for_conf, for_pred = for_probs.max(0)
+                        for_conf_val = for_conf.item()          # real confidence
                         image_analysis["forensic_label"] = self.forensic_classes[for_pred.item()]
-                        forensic_uncertain = for_conf.item() < 0.70
+                        forensic_uncertain = for_conf_val < 0.70
                     else:
                         image_analysis["forensic_label"] = "Authentic"
                         forensic_uncertain = False
+                        for_conf_val = 0.5
                     
                     for_text = "Manipulated Image" if image_analysis["forensic_label"] == "Tampered" else "Authentic"
                     image_analysis["combined_image_label"] = f"Real Crisis / Disaster — {for_text}"
@@ -325,11 +330,33 @@ class MultimodalService:
                     multimodal_label = "CREDIBLE — Real Disaster, Authentic"
                     reasoning = "Consistent, authentic evidence from both visual and textual modalities."
 
-            # --- SCORES & KEYWORD FLAGS ---
+            # --- SCORES from real model confidences ---
             if has_image:
-                image_score = 0.9 if image_analysis.get("forensic_label") == "Authentic" else (0.1 if img_is_disaster else 1.0)
+                # image_score: forensic confidence if disaster detected, else semantic confidence
+                if img_is_disaster:
+                    # Authentic → high score; Tampered → low score (inverted)
+                    image_score = for_conf_val if image_analysis.get("forensic_label") == "Authentic" else round(1.0 - for_conf_val, 3)
+                else:
+                    image_score = round(1.0 - sem_conf_val, 3)  # non-crisis → low authenticity concern
             else:
                 image_score = 0.0
+
+            # credibility_score: blend text confidence + image confidence based on modalities present
+            text_conf = text_result.get("confidence", 0.5) if has_text else None
+            if has_image and has_text:
+                # Fusion: weight image forensic + text confidence equally
+                img_contrib  = for_conf_val if img_is_disaster else sem_conf_val
+                credibility_score = round((img_contrib + (text_conf or 0.5)) / 2.0, 3)
+            elif has_image:
+                credibility_score = round(for_conf_val if img_is_disaster else sem_conf_val, 3)
+            elif has_text:
+                credibility_score = round(text_conf or 0.5, 3)
+            else:
+                credibility_score = 0.5
+
+            # For MISINFORMATION / HIGH RISK verdicts, invert so score reflects credibility (low = bad)
+            if any(tag in multimodal_label for tag in ("MISINFORMATION", "HIGH RISK", "SUSPICIOUS")):
+                credibility_score = round(1.0 - credibility_score, 3)
 
             model_keywords     = text_result.get("xai", {}).get("text_weights", []) if has_text else []
             flags_global       = []
@@ -415,9 +442,9 @@ class MultimodalService:
                     "multimodal_label": multimodal_label,
                     "reasoning":        reasoning
                 },
-                "verdict":          multimodal_label,
-                "credibility_score": 0.9 if "CREDIBLE" in multimodal_label else (0.1 if "MISINFORMATION" in multimodal_label else 0.5),
-                "image_score":      image_score,
+                "verdict":           multimodal_label,
+                "credibility_score": credibility_score,
+                "image_score":       image_score,
                 "xai_insights": {
                     "explanation":       explanation_text,
                     "audit_path":        audit_path_text,

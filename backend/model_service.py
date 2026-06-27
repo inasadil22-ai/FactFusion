@@ -10,7 +10,7 @@ class ModelLoader:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(base_dir, 'models', 'text_model')
+        model_path = os.path.join(base_dir, 'models', 'text_model_v2')
         
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
@@ -84,39 +84,61 @@ class ModelLoader:
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 probs = torch.softmax(outputs.logits, dim=1)[0]
-            
-            # Label 0: Non-Informative, Label 1: Informative (based on notebook)
-            inf_conf = probs[1].item()
-            non_inf_conf = probs[0].item()
-            
-            # Decision Logic based on Notebook + Prompt
-            if not has_context:
-                final_label = "OOD"
-                explanation = "The text is entirely unrelated to any crisis or disaster domain."
-                final_confidence = inf_conf # Still show what the model thought
-            elif is_uncertain:
-                final_label = "Unverified Rumor"
-                explanation = "Text contains specific information but uses speculative or unverified language."
-                final_confidence = inf_conf
-                xai_weights.append("UNCERTAIN-SIGNAL")
-            elif is_alarmist or is_exaggerated:
-                final_label = "Non-Informative"
-                explanation = "Text provides no actionable information (Alarmist/Exaggerated)."
-                final_confidence = inf_conf
-                if is_alarmist: xai_weights.append("ALARMIST")
-                if is_exaggerated: xai_weights.append("EXAGGERATED")
-            elif inf_conf > 0.55:
-                final_label = "Informative"
-                explanation = "The text contains useful, specific information about a disaster event."
-                final_confidence = inf_conf
-            else:
-                final_label = "Non-Informative"
-                explanation = "The text provides no actionable or useful information."
-                final_confidence = non_inf_conf
 
-            # Collect weights for XAI (disaster keywords found)
+            # Label 0: Non-Informative, Label 1: Informative (based on notebook)
+            inf_conf     = probs[1].item()
+            non_inf_conf = probs[0].item()
+            model_says_informative = inf_conf > 0.55
+
+            # --- Decision logic: RoBERTa is the primary signal ---
+            # Keywords only override when the model is confident AND they add
+            # clear semantic evidence (uncertain phrasing, alarmism, OOD topic).
+
+            if not has_context:
+                # Model sees no disaster topic → out-of-domain regardless of score
+                final_label      = "OOD"
+                final_confidence = max(non_inf_conf, 1.0 - inf_conf)
+                explanation      = "The text is entirely unrelated to any crisis or disaster domain."
+
+            elif is_uncertain and model_says_informative:
+                # RoBERTa thinks it's informative BUT uncertain language detected →
+                # downgrade to Unverified Rumor (speculative disaster claim)
+                final_label      = "Unverified Rumor"
+                final_confidence = inf_conf
+                explanation      = "Text contains disaster-related content but uses speculative or unverified language."
+                xai_weights.append("UNCERTAIN-SIGNAL")
+
+            elif (is_alarmist or is_exaggerated) and model_says_informative:
+                # RoBERTa thinks informative BUT alarmist/exaggerated phrasing →
+                # downgrade to Non-Informative (sensationalist, not actionable)
+                final_label      = "Non-Informative"
+                final_confidence = inf_conf
+                explanation      = "Text uses alarmist or exaggerated language with no actionable disaster information."
+                if is_alarmist:   xai_weights.append("ALARMIST")
+                if is_exaggerated: xai_weights.append("EXAGGERATED")
+
+            elif model_says_informative:
+                # RoBERTa confident → Informative (no overriding red flags)
+                final_label      = "Informative"
+                final_confidence = inf_conf
+                explanation      = "The text contains useful, specific information about a disaster event."
+
+            elif is_uncertain:
+                # Model not confident AND uncertain language → Unverified Rumor
+                final_label      = "Unverified Rumor"
+                final_confidence = non_inf_conf
+                explanation      = "Disaster context detected but language is speculative and model confidence is low."
+                xai_weights.append("UNCERTAIN-SIGNAL")
+
+            else:
+                # Model not confident, no special flags → Non-Informative
+                final_label      = "Non-Informative"
+                final_confidence = non_inf_conf
+                explanation      = "The text provides no actionable or useful disaster information."
+
+            # Collect keyword evidence for XAI
             found_keywords = [w.upper() for w in self.disaster_keywords if w in input_lower]
-            xai_weights = (found_keywords + xai_weights)[:5]
+            xai_weights    = (found_keywords + xai_weights)[:5]
         else:
             # Simple heuristic fallback
             if not has_context:
