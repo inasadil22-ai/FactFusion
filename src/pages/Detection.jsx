@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import {
   UploadCloud, Zap, FileText, Image as ImageIcon,
-  AlertTriangle, Download, ShieldAlert, Layers, ShieldCheck, X
+  AlertTriangle, Download, ShieldAlert, Layers, ShieldCheck, X,
+  Fingerprint
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
