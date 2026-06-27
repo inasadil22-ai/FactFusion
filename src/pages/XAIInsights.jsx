@@ -50,11 +50,9 @@ const XAIInsights = () => {
     const fetchRecords = async () => {
       try {
         setLoading(true);
+        const userString = localStorage.getItem('user');
         let url = `${API_BASE}/api/v1/analysis-history`;
 
-        // FIX Issue 2a: Handle both authenticated and unauthenticated users
-        // Only append user_id if user is logged in AND is not an admin
-        const userString = localStorage.getItem('user');
         if (userString) {
           try {
             const user = JSON.parse(userString);
@@ -63,36 +61,16 @@ const XAIInsights = () => {
             }
           } catch (e) {
             console.error('Error parsing user for XAI query:', e);
-            // Continue without user_id filter for unauthenticated users
           }
         }
 
         const res = await axios.get(url);
         const rawData = Array.isArray(res.data) ? res.data : [];
-
-        // FIX Issue 2b: Robust xai_insights filtering
-        // Check that both xai_insights exists AND is a non-empty object/array
-        // This handles cases where r.xai_insights is null, undefined, or empty
-        const withXai = rawData
-          .filter(r => r && r.xai_insights && Object.keys(r.xai_insights).length > 0)
-          .slice(0, 15);
+        const withXai = rawData.filter(r => r && r.xai_insights).slice(0, 15);
 
         // FIX 3: Warn in console if records were silently trimmed
-        const totalWithXai = rawData.filter(
-          r => r && r.xai_insights && Object.keys(r.xai_insights).length > 0
-        ).length;
-
-        if (totalWithXai > 15) {
-          console.warn(
-            `[XAIInsights] ${rawData.length} total records received, ${totalWithXai} with XAI insights — showing latest 15 only.`
-          );
-        }
-
-        // FIX Issue 2c: Log helpful message if no XAI records found
-        if (withXai.length === 0) {
-          console.warn(
-            `[XAIInsights] No analysis records with XAI insights found. Raw records: ${rawData.length}`
-          );
+        if (rawData.filter(r => r?.xai_insights).length > 15) {
+          console.warn(`[XAIInsights] ${rawData.length} records received — showing latest 15 only.`);
         }
 
         setRecords(withXai);
@@ -179,231 +157,344 @@ const XAIInsights = () => {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl md:text-5xl font-black tracking-tighter mb-6 leading-[0.9]"
           >
-            XAI Evidence Explorer
+            <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-blue-200">
+              Explainable AI{' '}
+              <span className="text-blue-500 inline-block drop-shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                Evidence
+              </span>
+            </span>
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-white/40 text-lg max-w-3xl leading-relaxed font-light"
+            className="text-lg text-blue-100/60 max-w-2xl leading-relaxed"
           >
-            Inspect neural decision logic, visual attention heatmaps, and multimodal evidence traces from your detection pipeline.
-            Each analysis includes explainable AI artifacts: Grad-CAM focus maps, SHAP keyword attributions, and fusion audits.
+            FactFusion provides cryptographic evidence for every detection. We map attention weights
+            to reveal the data points that triggered the system.
           </motion.p>
         </header>
 
-        {/* Dropdown & Loading */}
+        {/* Loading */}
         {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="py-20 text-center"
-          >
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 2 }}
-                className="w-5 h-5 border-2 border-blue-500/30 border-t-blue-400 rounded-full"
-              />
-              <span className="text-white/60">Loading analysis history...</span>
+          <div className="flex items-center justify-center py-32">
+            <div className="text-center">
+              <Activity size={40} className="text-blue-500/40 mx-auto mb-4 animate-pulse" />
+              <p className="text-xs font-black text-white/20 uppercase tracking-widest">
+                Synchronizing Neural Archive...
+              </p>
             </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && records.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center py-32 text-center"
+          >
+            <div className="w-24 h-24 rounded-[2rem] bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-8">
+              <Fingerprint size={40} className="text-blue-400/40" />
+            </div>
+            <h3 className="text-2xl font-black mb-3 tracking-tight">No Analyses Yet</h3>
+            <p className="text-white/40 max-w-md mb-8 font-medium">
+              Run your first detection to generate XAI evidence. Token attributions, heatmaps, and
+              audit trails will appear here.
+            </p>
+            <Link
+              to="/detection"
+              className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-sm hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95 transition-all duration-300"
+            >
+              Go to Detection <ArrowRight size={16} />
+            </Link>
           </motion.div>
         )}
 
-        {!loading && (
-          <>
-            {records.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="py-20 text-center"
+        {/* Main Content */}
+        {!loading && records.length > 0 && (
+          <div className="space-y-10">
+
+            {/* Selector */}
+            <div className="relative max-w-2xl">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="w-full flex items-center justify-between gap-4 px-8 py-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-blue-500/30 hover:bg-white/[0.05] hover:shadow-[0_0_25px_rgba(59,130,246,0.1)] transition-all duration-300 text-left"
               >
-                <AlertTriangle className="w-16 h-16 text-yellow-500/40 mx-auto mb-4" />
-                <h3 className="text-2xl font-bold mb-2">No Analyses Yet</h3>
-                <p className="text-white/40 max-w-2xl mx-auto">
-                  Run a detection on the main page to generate XAI insights. Each analysis with both text and image inputs
-                  will appear here for detailed inspection.
-                </p>
-                <Link
-                  to="/"
-                  className="inline-block mt-6 px-8 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold uppercase tracking-[0.15em] transition-all"
-                >
-                  Go to Detection Engine
-                </Link>
-              </motion.div>
-            ) : (
-              <>
-                <div className="mb-12 relative">
-                  <button
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                    className="w-full md:w-96 flex items-center justify-between gap-3 px-6 py-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-blue-500/30 transition-all font-bold text-left"
-                  >
-                    <span className="truncate text-white/80">
-                      {selected ? getRecordLabel(selected, records.indexOf(selected)) : 'Select a scan...'}
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-
-                  <AnimatePresence>
-                    {dropdownOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white/10 border border-white/20 rounded-xl overflow-hidden backdrop-blur-xl z-50 max-h-64 overflow-y-auto"
-                      >
-                        {records.map((r, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              setSelectedIdx(idx);
-                              setDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-6 py-3 border-b border-white/5 hover:bg-white/10 transition-colors ${selectedIdx === idx ? 'bg-blue-500/20' : ''}`}
-                          >
-                            <div className="font-bold text-sm mb-1">{getRecordLabel(r, idx)}</div>
-                            <div className="text-xs text-white/40">
-                              {getShortVerdict(r.verdict || 'Pending')} • {r.credibility_score ? `${(r.credibility_score * 100).toFixed(0)}%` : 'N/A'}
-                            </div>
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="p-2.5 rounded-xl bg-blue-500/10">
+                    <Cpu size={18} className="text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">
+                      Inspecting Analysis
+                    </p>
+                    <p className="text-sm font-bold text-white truncate">
+                      {getRecordLabel(selected, selectedIdx)}
+                    </p>
+                  </div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-black uppercase px-3 py-1 rounded-lg border ${getVerdictBg(selected)} ${getVerdictColor(selected)}`}>
+                    {selected?.verdict || 'N/A'}
+                  </span>
+                  <ChevronDown
+                    size={18}
+                    className={`text-white/40 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </div>
+              </button>
 
-                {/* Content */}
-                <AnimatePresence mode="wait">
-                  {selected ? (
-                    <motion.div
-                      key={selected.id || 'selected'}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className="space-y-8"
-                    >
-
-                      {/* Heatmap Section */}
-                      {hasHeatmap && hasImage && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.1 }}
-                          className="bg-white/[0.03] border border-white/10 rounded-3xl p-12 backdrop-blur-xl"
-                        >
-                          <div className="mb-8">
-                            <h3 className="text-lg font-bold text-blue-400 uppercase tracking-widest mb-2">
-                              Visual Focus Attribution Map
-                            </h3>
-                            <p className="text-sm text-white/40">
-                              Method: {getHeatmapMethodLabel(xai.heatmap_method) || 'Unknown'}
-                            </p>
-                          </div>
-
-                          <XAIVisualizer
-                            originalImageSrc={selected.image_ref}
-                            heatmapMatrix={xai.visual_heatmap}
-                            result={selected}
-                          />
-
-                          {xai.visual_explanation && (
-                            <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-xl">
-                              <h4 className="text-xs font-black text-blue-300 uppercase tracking-wider mb-2">
-                                Visual Evidence
-                              </h4>
-                              <p className="text-sm text-white/70 leading-relaxed">
-                                {xai.visual_explanation}
-                              </p>
-                            </div>
-                          )}
-                        </motion.div>
-                      )}
-
-                      {/* Text Attribution & Evidence */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: hasHeatmap ? 0.2 : 0.1 }}
-                        className="bg-white/[0.03] border border-white/10 rounded-3xl p-12 backdrop-blur-xl"
+              <AnimatePresence>
+                {dropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="absolute z-50 w-full mt-2 rounded-2xl bg-[#0a1128] border border-white/10 shadow-2xl overflow-hidden max-h-72 overflow-y-auto"
+                  >
+                    {records.map((record, idx) => (
+                      <button
+                        key={record.id || record._id || idx}
+                        onClick={() => { setSelectedIdx(idx); setDropdownOpen(false); }}
+                        className={`w-full flex items-center gap-4 px-6 py-4 text-left hover:bg-blue-500/10 transition-all border-b border-white/5 last:border-b-0 ${idx === selectedIdx ? 'bg-blue-500/10' : ''}`}
                       >
-                        <div className="mb-8">
-                          <h3 className="text-lg font-bold text-indigo-400 uppercase tracking-widest">
-                            Semantic Analysis & Attribution
-                          </h3>
-                        </div>
-
-                        <div className="space-y-6">
-
-                          {/* Main Explanation */}
-                          <div className="p-6 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl">
-                            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-wider mb-3">
-                              Explainable Reasoning
-                            </p>
-                            <p className="text-sm leading-relaxed text-white/80">
-                              {explanationText}
-                            </p>
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="flex gap-1.5">
+                            <FileText size={14} className={record.text_snippet ? 'text-blue-400' : 'text-white/10'} />
+                            <ImageIcon size={14} className={record.image_ref ? 'text-indigo-400' : 'text-white/10'} />
                           </div>
+                          <span className="text-sm text-white/80 font-medium truncate">
+                            {getRecordLabel(record, idx)}
+                          </span>
+                        </div>
+                        {/* FIX 7: regex split handles em-dash and regular hyphen */}
+                        <span className={`text-[10px] font-black uppercase ${getVerdictColor(record)}`}>
+                          {getShortVerdict(record.verdict)}
+                        </span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
-                          {/* Keyword Attributions (if available) */}
-                          {xai.keyword_attributions && Array.isArray(xai.keyword_attributions) && xai.keyword_attributions.length > 0 && (
-                            <div className="p-6 bg-purple-500/10 border border-purple-500/20 rounded-2xl">
-                              <p className="text-[10px] font-black text-purple-300 uppercase tracking-wider mb-3">
-                                🔑 Attributed Keywords (SHAP / Feature Importance)
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {xai.keyword_attributions.map((kw, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-lg text-xs font-semibold text-purple-200"
-                                  >
-                                    {kw}
+            {/* Evidence Display Panel */}
+            <AnimatePresence mode="wait">
+              {selectedIdx !== null && (
+                <motion.div
+                  key={selectedIdx}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-8"
+                >
+                  {/* Row 1: Attributions & Heatmap */}
+                  <div className={`grid gap-8 ${hasHeatmap ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+
+                    {/* Text Attributions Card */}
+                    <div className="flex flex-col p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-blue-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(59,130,246,0.05)] transition-all duration-300">
+                      <div className="flex items-center justify-between mb-8">
+                        <h2 className="text-xl font-black text-white flex items-center gap-3 uppercase tracking-tight">
+                          <MessageSquare size={24} className="text-blue-400" /> Textual Attention
+                        </h2>
+                        <Cpu size={20} className="text-blue-500/40" />
+                      </div>
+
+                      <div className="flex-1">
+                        {xai.text_attributions && xai.text_attributions.length > 0 ? (() => {
+                          const maxW = Math.max(...xai.text_attributions.map(a => Math.abs(a.weight)), 0.001);
+                          const hasNeg = xai.text_attributions.some(a => a.weight < 0);
+                          return (
+                            <div className="mb-8">
+                              <div className="flex items-center justify-between mb-3">
+                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                                  SHAP Token Attribution
+                                </p>
+                                <div className="flex gap-3 text-[9px] font-bold uppercase">
+                                  <span className="flex items-center gap-1 text-red-400">
+                                    <span className="w-2 h-2 rounded-sm bg-red-500 inline-block" />
+                                    Disaster signal
                                   </span>
-                                ))}
+                                  {hasNeg && (
+                                    <span className="flex items-center gap-1 text-blue-400">
+                                      <span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" />
+                                      Against
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          )}
-
-                          {/* Text Snippet */}
-                          {hasText && (
-                            <div className="p-6 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
-                              <p className="text-[10px] font-black text-blue-300 uppercase tracking-wider mb-3">
-                                📝 Input Text Snippet
+                              <div className="space-y-2">
+                                {xai.text_attributions.map((attr, idx) => {
+                                  const pct = (Math.abs(attr.weight) / maxW) * 100;
+                                  const isPos = attr.weight >= 0;
+                                  return (
+                                    <div key={idx} className="flex items-center gap-3">
+                                      <span className="w-20 text-right text-xs font-bold text-white/80 shrink-0 truncate">
+                                        {attr.token}
+                                      </span>
+                                      <div className="flex-1 h-5 bg-white/5 rounded overflow-hidden">
+                                        <div
+                                          className={`h-full rounded transition-all duration-500 ${isPos ? 'bg-red-500' : 'bg-blue-500'}`}
+                                          style={{ width: `${pct}%`, opacity: 0.85 }}
+                                        />
+                                      </div>
+                                      <span className={`w-14 text-xs font-mono font-bold shrink-0 ${isPos ? 'text-red-400' : 'text-blue-400'}`}>
+                                        {isPos ? '+' : ''}{attr.weight.toFixed(3)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <p className="text-[9px] text-white/30 mt-3">
+                                Red = pushes toward disaster · Blue = pushes against · Length = relative importance
                               </p>
-                              <p className="text-sm text-white/70 italic leading-relaxed">
-                                "{selected.text_snippet}"
-                              </p>
                             </div>
-                          )}
-
-                        </div>
-                      </motion.div>
-
-                      {/* Modality Summary */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="grid md:grid-cols-2 gap-6"
-                      >
-
-                        {hasText && (
-                          <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20">
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">
-                              📄 Text Evidence
+                          );
+                        })() : xai.text_weights && xai.text_weights.length > 0 ? (
+                          <div className="mb-8">
+                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">
+                              Keyword Signals
                             </p>
-                            <p className="text-xs text-white/70">
-                              <span className="text-indigo-400 font-bold">Label: </span>
-                              {selected?.stage_2_text_analysis?.text_label || 'N/A'}
-                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {xai.text_weights.map((word, i) => (
+                                <span
+                                  key={i}
+                                  className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs uppercase font-bold text-blue-300"
+                                >
+                                  {word}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mb-8 p-6 bg-black/40 rounded-[2rem] border border-white/5 flex items-center justify-center h-28">
+                            <span className="text-xs font-black text-white/20 uppercase tracking-widest">
+                              No Text Attributions Available
+                            </span>
                           </div>
                         )}
 
+                        {hasText && (
+                          <div className="p-6 bg-black/40 rounded-[2rem] border border-white/5 font-mono text-sm leading-relaxed relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-[1px] bg-blue-500/40 animate-[scan_4s_linear_infinite]" />
+                            <p className="text-blue-100/60 italic line-clamp-3">"{selected.text_snippet}"</p>
+                          </div>
+                        )}
+
+                        <p className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed mt-6">
+                          Transformer Weights • Token Risk Analysis • Sentiment Mapping
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Visual Saliency Card */}
+                    {hasHeatmap && (
+                      <div className="flex flex-col p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-indigo-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(99,102,241,0.05)] transition-all duration-300">
+                        <div className="flex items-center justify-between mb-8">
+                          <h2 className="text-xl font-black text-white flex items-center gap-3 uppercase tracking-tight">
+                            <ImageIcon size={24} className="text-indigo-400" /> Visual Saliency
+                          </h2>
+                          <Target size={20} className="text-indigo-500/40" />
+                        </div>
+
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                          {/* FIX: image URL — ideally backend sends image_url directly;
+                              constructing it here as fallback only */}
+                          <XAIVisualizer
+                            originalImageSrc={selected.image_url || `${API_BASE}/uploads/${selected.image_ref}`}
+                            heatmapMatrix={xai.visual_heatmap}
+                          />
+
+                          <div className="mt-4 flex flex-wrap items-center gap-2 justify-center">
+                            {/* FIX 8: heatmap_status — case-insensitive check */}
+                            <span className={`text-[10px] px-3 py-1 rounded-lg border font-black uppercase ${xai.heatmap_status?.toUpperCase().includes('AVAILABLE')
+                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                              : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                              }`}>
+                              {xai.heatmap_status || 'UNKNOWN'}
+                            </span>
+
+                            {/* FIX 2: heatmap_method — case-insensitive via helper */}
+                            {xai.heatmap_method && (
+                              <span className="text-[10px] px-3 py-1 rounded-lg border font-black uppercase bg-blue-500/10 border-blue-500/20 text-blue-300">
+                                {getHeatmapMethodLabel(xai.heatmap_method)}
+                              </span>
+                            )}
+
+                            {/* FIX 5: dominant_modality — lowercase compare */}
+                            {dominantModality && (
+                              <span className={`text-[10px] px-3 py-1 rounded-lg border font-black uppercase ${dominantModality === 'image'
+                                ? 'bg-red-500/10 border-red-500/20 text-red-300'
+                                : 'bg-purple-500/10 border-purple-500/20 text-purple-300'
+                                }`}>
+                                {dominantModality === 'image' ? '🖼 Image drove decision' : '📝 Text drove decision'}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed mt-4 text-center">
+                            Red regions = disaster evidence · Boxes = top decision zones
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Row 2: Logic + Pipeline Audit Trail */}
+                  <div className="grid md:grid-cols-2 gap-8">
+
+                    {/* Logic Transparency Card */}
+                    <div className="p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-indigo-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(99,102,241,0.05)] transition-all duration-300">
+                      <div className="mb-6">
+                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest">
+                          Logic Transparency
+                        </h3>
+                        <p className="text-[10px] text-white/30 uppercase tracking-wider mt-1">
+                          Why was this verdict chosen?
+                        </p>
+                      </div>
+
+                      {/* FIX 6: explanation split documented & guarded */}
+                      <p className="text-lg italic text-white/80 mb-6 leading-relaxed">
+                        "{explanationText}"
+                      </p>
+
+                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border font-black text-sm uppercase ${getVerdictBg(selected)} ${getVerdictColor(selected)}`}>
+                        <ShieldCheck size={16} />
+                        {selected?.verdict || 'N/A'}
+                      </div>
+
+                      <div className="mt-6 space-y-3">
+                        {xai.text_attributions && xai.text_attributions.length > 0 && (() => {
+                          const top = [...xai.text_attributions].sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0, 3);
+                          const forDisaster = top.filter(t => t.weight > 0);
+                          const against = top.filter(t => t.weight < 0);
+                          return (
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">
+                                📝 Text Evidence
+                              </p>
+                              {forDisaster.length > 0 && (
+                                <p className="text-xs text-white/70">
+                                  <span className="text-red-400 font-bold">Disaster signals: </span>
+                                  {forDisaster.map(t => `"${t.token}" (+${t.weight.toFixed(2)})`).join(', ')}
+                                </p>
+                              )}
+                              {against.length > 0 && (
+                                <p className="text-xs text-white/70 mt-1">
+                                  <span className="text-blue-400 font-bold">Against: </span>
+                                  {against.map(t => `"${t.token}" (${t.weight.toFixed(2)})`).join(', ')}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         {hasImage && (
-                          <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20">
+                          <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
                             <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-2">
                               🖼 Image Evidence
                             </p>
@@ -433,7 +524,7 @@ const XAIInsights = () => {
                             </p>
                           </div>
                         )}
-                      </motion.div>
+                      </div>
 
                       <div className="mt-6 flex gap-4">
                         <div className="px-4 py-3 bg-white/5 rounded-xl border border-white/10 text-center">
@@ -452,120 +543,111 @@ const XAIInsights = () => {
                           </div>
                         )}
                       </div>
+                    </div>
 
-                      {/* Pipeline Audit Trail Card */}
-                      <div className="p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-purple-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(168,85,247,0.05)] transition-all duration-300">
-                        <div className="mb-8">
-                          <h3 className="text-sm font-bold text-purple-400 uppercase tracking-widest">
-                            Pipeline Audit Trail
-                          </h3>
-                          <p className="text-[10px] text-white/30 uppercase tracking-wider mt-1">
-                            3-Stage Multimodal Detection Pipeline
-                          </p>
-                        </div>
-
-                        <div className="space-y-4">
-
-                          {/* Stage 1 */}
-                          <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasText
-                            ? 'bg-indigo-500/5 border-indigo-500/20'
-                            : 'bg-white/[0.02] border-white/5 opacity-40'
-                            }`}>
-                            <div className={`p-2 rounded-lg ${hasText ? 'bg-indigo-500/20' : 'bg-white/10'}`}>
-                              <FileText size={16} className={hasText ? 'text-indigo-400' : 'text-white/30'} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
-                                Stage 1 — Text Analysis
-                              </p>
-                              <p className="text-sm font-bold text-white truncate">
-                                {selected?.stage_2_text_analysis?.text_label || 'N/A'}
-                              </p>
-                            </div>
-                            {hasText && (
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor'
-                                ? 'bg-red-500/10 border-red-500/20 text-red-300'
-                                : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
-                                }`}>
-                                {selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor'
-                                  ? 'Flagged' : 'Passed'}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Stage 2 */}
-                          <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasImage
-                            ? 'bg-blue-500/5 border-blue-500/20'
-                            : 'bg-white/[0.02] border-white/5 opacity-40'
-                            }`}>
-                            <div className={`p-2 rounded-lg ${hasImage ? 'bg-blue-500/20' : 'bg-white/10'}`}>
-                              <ImageIcon size={16} className={hasImage ? 'text-blue-400' : 'text-white/30'} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">
-                                Stage 2 — Image Analysis
-                              </p>
-                              <p className="text-sm font-bold text-white truncate">
-                                {selected?.stage_1_image_analysis?.combined_image_label || 'N/A'}
-                              </p>
-                            </div>
-                            {hasImage && (
-                              <span className="text-[9px] font-black px-2 py-0.5 rounded border bg-blue-500/10 border-blue-500/20 text-blue-300">
-                                {selected?.stage_1_image_analysis?.semantic_label || 'N/A'}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex justify-center py-1">
-                            <ArrowRight size={14} className="text-white/10 rotate-90" />
-                          </div>
-
-                          {/* Stage 3 */}
-                          <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasText && hasImage
-                            ? 'bg-purple-500/5 border-purple-500/20'
-                            : 'bg-white/[0.02] border-white/5 opacity-40'
-                            }`}>
-                            <div className={`p-2 rounded-lg ${hasText && hasImage ? 'bg-purple-500/20' : 'bg-white/10'}`}>
-                              <Zap size={16} className={hasText && hasImage ? 'text-purple-400' : 'text-white/30'} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">
-                                Stage 3 — Multimodal Fusion
-                              </p>
-                              <p className="text-sm font-bold text-white truncate">
-                                {(hasText && hasImage)
-                                  ? selected?.stage_3_multimodal_fusion?.multimodal_label || 'N/A'
-                                  : 'N/A — Single Modality'}
-                              </p>
-                            </div>
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${hasText && hasImage
-                              ? 'bg-purple-500/10 border-purple-500/20 text-purple-300'
-                              : 'bg-gray-500/10 border-gray-500/20 text-gray-400'
-                              }`}>
-                              {hasText && hasImage ? 'Final Verdict' : 'Single Mode'}
-                            </span>
-                          </div>
-
-                        </div>
+                    {/* Pipeline Audit Trail Card */}
+                    <div className="p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-purple-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(168,85,247,0.05)] transition-all duration-300">
+                      <div className="mb-8">
+                        <h3 className="text-sm font-bold text-purple-400 uppercase tracking-widest">
+                          Pipeline Audit Trail
+                        </h3>
+                        <p className="text-[10px] text-white/30 uppercase tracking-wider mt-1">
+                          3-Stage Multimodal Detection Pipeline
+                        </p>
                       </div>
 
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="py-20 text-center text-white/40"
-                    >
-                      Select a scan from the dropdown to inspect XAI evidence.
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <div className="space-y-4">
 
-              </>
-            )}
-          </>
+                        {/* Stage 1 */}
+                        <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasText
+                          ? 'bg-indigo-500/5 border-indigo-500/20'
+                          : 'bg-white/[0.02] border-white/5 opacity-40'
+                          }`}>
+                          <div className={`p-2 rounded-lg ${hasText ? 'bg-indigo-500/20' : 'bg-white/10'}`}>
+                            <FileText size={16} className={hasText ? 'text-indigo-400' : 'text-white/30'} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
+                              Stage 1 — Text Analysis
+                            </p>
+                            <p className="text-sm font-bold text-white truncate">
+                              {selected?.stage_2_text_analysis?.text_label || 'N/A'}
+                            </p>
+                          </div>
+                          {hasText && (
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor'
+                              ? 'bg-red-500/10 border-red-500/20 text-red-300'
+                              : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
+                              }`}>
+                              {selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor'
+                                ? 'Flagged' : 'Passed'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Stage 2 */}
+                        <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasImage
+                          ? 'bg-blue-500/5 border-blue-500/20'
+                          : 'bg-white/[0.02] border-white/5 opacity-40'
+                          }`}>
+                          <div className={`p-2 rounded-lg ${hasImage ? 'bg-blue-500/20' : 'bg-white/10'}`}>
+                            <ImageIcon size={16} className={hasImage ? 'text-blue-400' : 'text-white/30'} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">
+                              Stage 2 — Image Analysis
+                            </p>
+                            <p className="text-sm font-bold text-white truncate">
+                              {selected?.stage_1_image_analysis?.combined_image_label || 'N/A'}
+                            </p>
+                          </div>
+                          {hasImage && (
+                            <span className="text-[9px] font-black px-2 py-0.5 rounded border bg-blue-500/10 border-blue-500/20 text-blue-300">
+                              {selected?.stage_1_image_analysis?.semantic_label || 'N/A'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex justify-center py-1">
+                          <ArrowRight size={14} className="text-white/10 rotate-90" />
+                        </div>
+
+                        {/* Stage 3 */}
+                        <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${hasText && hasImage
+                          ? 'bg-purple-500/5 border-purple-500/20'
+                          : 'bg-white/[0.02] border-white/5 opacity-40'
+                          }`}>
+                          <div className={`p-2 rounded-lg ${hasText && hasImage ? 'bg-purple-500/20' : 'bg-white/10'}`}>
+                            <Zap size={16} className={hasText && hasImage ? 'text-purple-400' : 'text-white/30'} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">
+                              Stage 3 — Multimodal Fusion
+                            </p>
+                            <p className="text-sm font-bold text-white truncate">
+                              {(hasText && hasImage)
+                                ? selected?.stage_3_multimodal_fusion?.multimodal_label || 'N/A'
+                                : 'N/A — Single Modality'}
+                            </p>
+                          </div>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${hasText && hasImage
+                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-300'
+                            : 'bg-gray-500/10 border-gray-500/20 text-gray-400'
+                            }`}>
+                            {hasText && hasImage ? 'Final Verdict' : 'Single Mode'}
+                          </span>
+                        </div>
+
+                      </div>
+                    </div>
+
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+          </div>
         )}
-
       </div>
     </div>
   );

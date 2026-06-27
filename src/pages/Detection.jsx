@@ -87,8 +87,7 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
     };
   }, [originalImageSrc, heatmapMatrix, opacity]);
 
-  // FIX Issue 1: Use credibility_score directly (stage_2_text_analysis.semantic_integrity doesn't exist)
-  const semanticScore = result?.credibility_score ?? 0.5;
+  const semanticScore = result?.stage_2_text_analysis?.semantic_integrity ?? result?.credibility_score ?? 0.5;
   const visualScore = result?.stage_1_image_analysis?.visual_authenticity ?? result?.image_score ?? 0.9;
   const fusionScore = result?.stage_3_multimodal_fusion?.mismatch_score ?? result?.fusion_score ?? 0.7;
 
@@ -170,338 +169,271 @@ const Detection = () => {
   const tabs = [
     { id: 'text', label: 'Text Only', icon: FileText },
     { id: 'image', label: 'Image Only', icon: ImageIcon },
-    { id: 'multimodal', label: 'Text + Image', icon: Layers }
+    { id: 'multimodal', label: 'Multimodal', icon: Layers },
   ];
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = (evt) => setPreviewUrl(evt.target?.result);
-    reader.readAsDataURL(file);
+  const downloadPDF = async () => {
+    if (!reportRef.current) return;
+    const canvas = await html2canvas(reportRef.current, {
+      backgroundColor: '#020617',
+      scale: 2,
+      useCORS: true,
+    });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`FactFusion_Forensic_Report_${Date.now()}.pdf`);
   };
 
-  const handleSubmit = async () => {
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setResult(null);
+    }
+  };
+
+  const removeFile = (e) => {
+    e?.stopPropagation();
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleAnalyze = async () => {
+    const hasText = activeTab !== 'image' && !!(textValue && textValue.trim());
+    const hasImage = activeTab !== 'text' && !!selectedFile;
+
+    if (!hasText && !hasImage) {
+      alert('Please provide text or an image for the selected analysis mode.');
+      return;
+    }
+
     setLoading(true);
     setResult(null);
 
+    const formData = new FormData();
+    if (hasText) formData.append('text', textValue.trim());
+    if (hasImage) formData.append('file', selectedFile);
+
     try {
-      const formData = new FormData();
-
-      if (activeTab === 'text' && textValue.trim()) {
-        formData.append('text', textValue.trim());
-      } else if (activeTab === 'image' && selectedFile) {
-        formData.append('image', selectedFile);
-      } else if (activeTab === 'multimodal') {
-        if (textValue.trim()) formData.append('text', textValue.trim());
-        if (selectedFile) formData.append('image', selectedFile);
-      } else {
-        alert('Please provide input');
-        setLoading(false);
-        return;
+      const userString = localStorage.getItem('user');
+      if (userString) {
+        const user = JSON.parse(userString);
+        if (user?.id) formData.append('user_id', user.id);
       }
+    } catch (e) {
+      console.error('Error parsing user context:', e);
+    }
 
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
-      const res = await axios.post(`${API_BASE}/api/v1/analyze`, formData, {
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
+      const response = await axios.post(`${apiBase}/api/v1/analyze`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setResult(res.data);
-    } catch (err) {
-      console.error('Analysis failed:', err);
-      alert(`Error: ${err.response?.data?.error || err.message}`);
+      setResult({
+        ...response.data,
+        active_modalities: { text: hasText, image: hasImage },
+      });
+    } catch (error) {
+      console.error('API Error:', error);
+      alert('Failed to connect to AI server. Ensure the backend is running.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!result || !reportRef.current) return;
-
-    try {
-      const canvas = await html2canvas(reportRef.current, {
-        backgroundColor: '#020617',
-        scale: 2,
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      let imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      let position = 0;
-
-      while (position < imgHeight) {
-        const pageHeight = pdfHeight - 10;
-        const sourceY = (position * canvas.height) / imgHeight;
-        const sourceHeight = (pageHeight * canvas.height) / imgHeight;
-
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sourceHeight;
-        const ctx = pageCanvas.getContext('2d');
-        ctx?.drawImage(
-          canvas,
-          0, sourceY, canvas.width, sourceHeight,
-          0, 0, canvas.width, sourceHeight
-        );
-
-        const pageImgData = pageCanvas.toDataURL('image/png');
-        if (position > 0) pdf.addPage();
-        pdf.addImage(pageImgData, 'PNG', 5, 5, pdfWidth - 10, pageHeight);
-
-        position += pageHeight;
-      }
-
-      pdf.save('detection-report.pdf');
-    } catch (err) {
-      console.error('PDF download failed:', err);
-      alert('Failed to download PDF');
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#020617] via-[#0f172a] to-[#020617] text-white selection:bg-blue-500/30 overflow-hidden relative font-sans">
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-indigo-600/5 blur-[120px] rounded-full pointer-events-none" />
+    <div className="min-h-screen bg-[#020617] text-white pt-32 pb-20 px-6 relative font-sans">
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6 pt-28 pb-20">
-        {/* Header */}
-        <header className="mb-16">
+      <div className="relative z-10 max-w-7xl mx-auto">
+        <header className="mb-12">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6"
           >
-            <ShieldAlert className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] font-black tracking-[0.2em] text-blue-300 uppercase">
-              AI-Powered Misinformation Detector
+            <ShieldCheck className="w-4 h-4 text-blue-400" />
+            <span className="text-[10px] tracking-[0.2em] text-blue-300 uppercase font-black">
+              Fusion Intelligence Engine v2.5
             </span>
           </motion.div>
+
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-5xl md:text-6xl font-black tracking-tighter mb-6 leading-[0.9]"
+            className="text-4xl md:text-5xl font-black tracking-tighter mb-6 leading-[0.9]"
           >
-            Detection Engine
+            <span className="bg-clip-text text-transparent bg-gradient-to-b from-white to-blue-200">
+              Crisis{' '}
+              <span className="text-blue-500 inline-block drop-shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                Integrity
+              </span>{' '}
+              Gate
+            </span>
           </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-white/40 text-lg max-w-2xl font-light leading-relaxed"
-          >
-            Upload content for real-time multimodal analysis. Our system evaluates text credibility,
-            image authenticity, and cross-modal consistency in seconds.
-          </motion.p>
         </header>
 
-        {/* Tab Navigation */}
-        <div className="mb-12 border border-white/10 rounded-2xl p-2 bg-white/5 backdrop-blur-xl inline-flex gap-2">
+        <nav className="flex flex-wrap gap-4 mb-10">
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === tab.id
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                : 'text-white/60 hover:text-white'
+              onClick={() => { setActiveTab(tab.id); setResult(null); }}
+              className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-sm transition-all border ${activeTab === tab.id
+                ? 'bg-blue-600/20 border-blue-500 text-white'
+                : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
                 }`}
             >
-              <tab.icon size={16} />
-              {tab.label}
+              <tab.icon size={20} /> {tab.label}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {/* Input Area */}
-        <AnimatePresence mode="wait">
-          {activeTab === 'text' && (
-            <motion.div
-              key="text-input"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="mb-12 bg-white/[0.03] border border-white/10 rounded-3xl p-8 backdrop-blur-xl"
-            >
-              <label className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 block">
-                Enter Text to Analyze
-              </label>
-              <textarea
-                value={textValue}
-                onChange={(e) => setTextValue(e.target.value)}
-                placeholder="Paste the text claim or statement you'd like verified..."
-                className="w-full h-48 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 resize-none"
-              />
-            </motion.div>
-          )}
-
-          {activeTab === 'image' && (
-            <motion.div
-              key="image-input"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="mb-12 bg-white/[0.03] border border-white/10 rounded-3xl p-8 backdrop-blur-xl"
-            >
-              <label className="text-sm font-bold text-purple-400 uppercase tracking-widest mb-6 block">
-                Upload Image
-              </label>
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-white/20 rounded-2xl p-12 text-center cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-all"
-              >
-                {previewUrl ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <img src={previewUrl} alt="Preview" className="max-h-48 rounded-xl" />
-                    <p className="text-sm text-white/60">{selectedFile?.name}</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-4">
-                    <UploadCloud className="w-12 h-12 text-purple-400/40" />
-                    <div>
-                      <p className="font-bold text-white mb-1">Drag & drop or click to upload</p>
-                      <p className="text-sm text-white/40">PNG, JPG, or WebP (max 5MB)</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </motion.div>
-          )}
-
-          {activeTab === 'multimodal' && (
-            <motion.div
-              key="multimodal-input"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="mb-12 grid md:grid-cols-2 gap-8"
-            >
-              {/* Text Input */}
-              <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
-                <label className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 block">
-                  Text Content
-                </label>
+        <section className="bg-white/[0.03] border border-white/10 rounded-[3rem] p-10 backdrop-blur-3xl shadow-2xl mb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            {(activeTab === 'text' || activeTab === 'multimodal') && (
+              <div className="lg:col-span-2">
                 <textarea
                   value={textValue}
                   onChange={(e) => setTextValue(e.target.value)}
-                  placeholder="Paste the claim or statement..."
-                  className="w-full h-40 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 resize-none"
+                  placeholder="Paste disaster description..."
+                  className="w-full h-72 p-8 rounded-[2.5rem] bg-[#020617]/50 border border-white/5 focus:border-blue-500/50 text-blue-100 text-lg outline-none transition-all"
                 />
               </div>
+            )}
 
-              {/* Image Input */}
-              <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
-                <label className="text-sm font-bold text-purple-400 uppercase tracking-widest mb-4 block">
-                  Image
-                </label>
+            {(activeTab === 'image' || activeTab === 'multimodal') && (
+              <div className="lg:col-span-1">
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-white/20 rounded-2xl p-6 text-center cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-all h-40 flex flex-col items-center justify-center"
+                  className="h-72 border-2 border-dashed border-white/10 rounded-[2.5rem] bg-[#020617]/50 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden"
                 >
-                  {previewUrl ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                      <img src={previewUrl} alt="Preview" className="max-h-24 rounded-lg" />
-                      <p className="text-xs text-white/60">{selectedFile?.name}</p>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  {!previewUrl ? (
+                    <div className="text-center">
+                      <UploadCloud size={56} className="text-blue-400/50 mx-auto mb-4" />
+                      <p className="text-xs font-black text-white/40 uppercase tracking-widest">
+                        Upload Media
+                      </p>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <ImageIcon className="w-8 h-8 text-purple-400/40" />
-                      <p className="text-xs font-bold text-white">Click to upload</p>
+                    <div className="relative h-full w-full p-4">
+                      <img
+                        src={previewUrl}
+                        className="h-full w-full object-cover rounded-3xl"
+                        alt="Preview"
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile();
+                        }}
+                        className="absolute top-8 right-8 p-3 bg-red-500 text-white rounded-full transition-transform hover:scale-105"
+                      >
+                        <X size={20} />
+                      </button>
                     </div>
                   )}
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Submit Button */}
-        <div className="mb-12">
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold uppercase tracking-[0.15em] rounded-2xl transition-all shadow-lg shadow-blue-900/40 hover:-translate-y-1"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 1 }}
-                  className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                />
-                Analyzing...
-              </span>
-            ) : (
-              'Analyze Content'
             )}
-          </button>
-        </div>
+          </div>
 
-        {/* Results */}
+          <div className="mt-12 flex justify-center">
+            <button
+              onClick={handleAnalyze}
+              disabled={loading}
+              className="px-20 py-6 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.3em] disabled:opacity-50 transition-all shadow-lg shadow-blue-600/20"
+            >
+              {loading ? 'Neural Core Processing…' : 'Initiate Detection'}
+            </button>
+          </div>
+        </section>
+
         <AnimatePresence>
           {result && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
               ref={reportRef}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-12"
             >
-              {/* Summary Card */}
-              <motion.div className="bg-gradient-to-br from-blue-600/20 via-indigo-600/10 to-transparent border border-blue-500/30 rounded-[3rem] p-12 backdrop-blur-xl">
-                <div className="flex items-start justify-between mb-8">
-                  <div>
-                    <h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
-                      {classifyVerdict(result)?.label || 'UNCLASSIFIED'}
-                    </h2>
-                    <p className="text-white/60 text-lg max-w-2xl">
-                      {result.verdict || 'Analysis complete. Review detailed findings below.'}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
+              {(() => {
+                const { isCredible, isHighRisk, isSuspicious } = classifyVerdict(result);
+
+                const cardStyles = isCredible
+                  ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
+                  : isHighRisk
+                    ? 'bg-red-500/5 border-red-500/20 text-red-400'
+                    : isSuspicious
+                      ? 'bg-amber-500/5 border-amber-500/20 text-amber-400'
+                      : 'bg-gray-500/5 border-gray-500/20 text-gray-400';
+
+                const iconContainerStyles = isCredible
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : isHighRisk
+                    ? 'bg-red-500/20 text-red-400'
+                    : isSuspicious
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : 'bg-gray-500/20 text-gray-400';
+
+                const VerdictIcon = isCredible
+                  ? ShieldCheck
+                  : isHighRisk
+                    ? AlertTriangle
+                    : ShieldAlert;
+
+                return (
+                  <div className={`p-6 rounded-[2.5rem] border-2 flex flex-col md:flex-row items-center justify-between gap-8 ${cardStyles}`}>
+                    <div className="flex items-center gap-6 w-full md:w-auto">
+                      <div className={`p-5 rounded-[1.5rem] flex-shrink-0 ${iconContainerStyles}`}>
+                        <VerdictIcon size={40} />
+                      </div>
+                      <div>
+                        <h3 className="text-3xl font-bold tracking-tight text-white">
+                          {result.verdict || 'Analysis Result'}
+                        </h3>
+                        <p className="text-white/40 font-bold uppercase text-xs mt-1">
+                          Score: {((result.credibility_score ?? 0) * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+
+                    {result.stage_1_image_analysis?.heatmap && (
+                      <div className="w-full md:w-auto flex justify-center">
+                        <XAIVisualizer
+                          originalImageSrc={previewUrl}
+                          heatmapMatrix={result.stage_1_image_analysis.heatmap}
+                          result={result}
+                        />
+                      </div>
+                    )}
+
                     <button
-                      onClick={handleDownloadPDF}
-                      className="p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all"
+                      onClick={downloadPDF}
+                      className="p-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl flex-shrink-0 self-end md:self-center transition-all"
+                      title="Download Analysis Report"
                     >
                       <Download size={20} />
                     </button>
-                    <button
-                      className="p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all"
-                    >
-                      <X size={20} />
-                    </button>
                   </div>
-                </div>
+                );
+              })()}
 
-                {result.xai_insights && (
-                  <XAIVisualizer
-                    originalImageSrc={result.image_ref}
-                    heatmapMatrix={result.xai_insights?.visual_heatmap}
-                    result={result}
-                  />
-                )}
-              </motion.div>
-
-              {/* Analysis Details Grid */}
-              <div className="grid md:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className={`border p-8 rounded-[2rem] relative overflow-hidden transition-all duration-500 ${result.active_modalities?.text
                   ? 'bg-indigo-500/10 border-indigo-500/40 shadow-[0_0_30px_rgba(99,102,241,0.15)]'
                   : 'bg-white/[0.03] border-white/10 opacity-40'
@@ -513,7 +445,7 @@ const Detection = () => {
                   <p className="text-lg font-bold text-white leading-tight">
                     {result.stage_2_text_analysis?.text_label || 'N/A'}
                   </p>
-                  <div className="mt-4 flex gap-2 flex-wrap">
+                  <div className="mt-4">
                     {result.active_modalities?.text ? (
                       <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${result.stage_2_text_analysis?.text_label === 'Unverified Rumor'
                         ? 'bg-red-500/10 border-red-500/20 text-red-300'
