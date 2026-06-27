@@ -32,7 +32,8 @@ class ModelLoader:
             'casualty', 'dead', 'death', 'died', 'injured', 'injury', 'blood', 'victim',
             'survivor', 'bodies', 'debris', 'collapsed', 'destroyed', 'damage', 'shattered',
             'fire', 'explosion', 'blast', 'smoke', 'terrorist', 'shooting', 'hostage',
-            'alert', 'warning', 'critical', 'urgent', 'disaster', 'catastrophe'
+            'alert', 'warning', 'critical', 'urgent', 'disaster', 'catastrophe','gas', 'toxic', 'leak', 'radiation', 'chemical', 'nuclear',
+            'outbreak', 'epidemic', 'pandemic', 'virus', 'contamination','spreading', 'affected', 'billion', 'millions'
         ]
 
         self.uncertain_words = [
