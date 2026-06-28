@@ -407,6 +407,7 @@ const XAIInsights = () => {
                           <XAIVisualizer
                             originalImageSrc={selected.image_url || `${API_BASE}/uploads/${selected.image_ref}`}
                             heatmapMatrix={xai.visual_heatmap}
+                            result={selected}
                           />
 
                           <div className="mt-4 flex flex-wrap items-center gap-2 justify-center">
