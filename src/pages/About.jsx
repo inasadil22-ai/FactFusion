@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-// Added CheckCircle to the lucide-react imports below
 import { Cpu, Eye, Target, ShieldCheck, Zap, BarChart, CheckCircle } from 'lucide-react';
 
 const About = () => {
@@ -28,7 +27,7 @@ const About = () => {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6 backdrop-blur-md"
           >
             <CheckCircle className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] font-black tracking-[0.2em] text-blue-300 uppercase">Disaster Intelligence System</span>
+            <span className="text-[10px] font-black tracking-[0.2em] text-blue-300 uppercase">Disaster Verification System</span>
           </motion.div>
 
           <motion.h1
