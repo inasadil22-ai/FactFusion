@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import jsPDF from 'jspdf';
 import {
   Fingerprint, MessageSquare, Image as ImageIcon,
   Cpu, Target, Zap, Activity, ShieldCheck, ChevronDown,
-  FileText, Layers, AlertTriangle, Clock, ArrowRight
+  FileText, Layers, AlertTriangle, Clock, ArrowRight, Download
 } from 'lucide-react';
 import { XAIVisualizer } from './Detection';
 
@@ -44,9 +45,436 @@ const XAIInsights = () => {
   const [loading, setLoading] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const downloadFullReport = async () => {
+    if (!selected) return;
+    setIsDownloading(true);
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 16;
+      const contentW = pageW - margin * 2;
+      let y = margin;
+
+      const accent = [59, 130, 246];    // blue
+      const purple = [168, 85, 247];
+      const indigo = [99, 102, 241];
+      const emerald = [16, 185, 129];
+      const amber = [245, 158, 11];
+      const red = [239, 68, 68];
+      const dark = [2, 6, 23];
+      const cardBg = [10, 17, 40];
+      const textWhite = [255, 255, 255];
+      const textMuted = [148, 163, 184];
+
+      const checkNewPage = (needed = 20) => {
+        if (y + needed > pageH - margin) {
+          doc.addPage();
+          y = margin;
+          drawPageHeader();
+        }
+      };
+
+      const drawPageHeader = () => {
+        doc.setFillColor(...dark);
+        doc.rect(0, 0, pageW, pageH, 'F');
+        doc.setFillColor(accent[0], accent[1], accent[2], 0.05);
+        doc.rect(0, 0, pageW, 8, 'F');
+        doc.setFontSize(7);
+        doc.setTextColor(...textMuted);
+        doc.text('FactFusion · Forensic Intelligence Report', margin, 5.5);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, pageW - margin, 5.5, { align: 'right' });
+      };
+
+      const drawSectionLabel = (label, color = accent) => {
+        checkNewPage(14);
+        doc.setFontSize(7);
+        doc.setTextColor(...color);
+        doc.setFont(undefined, 'bold');
+        doc.text(label.toUpperCase(), margin, y);
+        y += 4;
+        doc.setDrawColor(...color);
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, margin + contentW * 0.4, y);
+        y += 5;
+        doc.setFont(undefined, 'normal');
+      };
+
+      const drawCard = (height, fillColor = cardBg, borderColor = [30, 41, 70]) => {
+        checkNewPage(height + 4);
+        doc.setFillColor(...fillColor);
+        doc.setDrawColor(...borderColor);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, y, contentW, height, 3, 3, 'FD');
+      };
+
+      const verdictColorArr = () => {
+        const v = (selected?.verdict || '').toLowerCase();
+        if (v.includes('credible') || v.includes('real')) return emerald;
+        if (v.includes('fake') || v.includes('misinformation')) return red;
+        if (v.includes('suspicious') || v.includes('rumor')) return amber;
+        return textMuted;
+      };
+
+      // ── Page 1 ────────────────────────────────────────────────────────────
+      drawPageHeader();
+      y = 16;
+
+      // Title block
+      doc.setFillColor(accent[0], accent[1], accent[2]);
+      doc.roundedRect(margin, y, contentW, 24, 3, 3, 'F');
+      doc.setFontSize(18);
+      doc.setTextColor(...textWhite);
+      doc.setFont(undefined, 'bold');
+      doc.text('FactFusion', margin + 6, y + 9);
+      doc.setFontSize(9);
+      doc.setTextColor(200, 220, 255);
+      doc.setFont(undefined, 'normal');
+      doc.text('Forensic Intelligence Report', margin + 6, y + 16);
+      doc.setFontSize(7);
+      doc.setTextColor(180, 210, 255);
+      const recordLabel = selected?.text_snippet
+        ? selected.text_snippet.split(' ').slice(0, 8).join(' ') + '…'
+        : selected?.image_ref || 'Analysis Report';
+      doc.text(`Scan: ${recordLabel}`, pageW - margin - 2, y + 16, { align: 'right' });
+      y += 30;
+
+      // ── Verdict Banner ──────────────────────────────────────────────────
+      drawSectionLabel('Final Verdict', verdictColorArr());
+      const vColor = verdictColorArr();
+      doc.setFillColor(vColor[0], vColor[1], vColor[2], 0.08);
+      doc.setDrawColor(...vColor);
+      doc.setLineWidth(0.5);
+      doc.roundedRect(margin, y, contentW, 22, 3, 3, 'FD');
+
+      doc.setFontSize(14);
+      doc.setTextColor(...vColor);
+      doc.setFont(undefined, 'bold');
+      doc.text(selected?.verdict || 'N/A', margin + 6, y + 9);
+
+      const credScore = ((selected?.credibility_score ?? 0) * 100).toFixed(1);
+      const imgScore = selected?.image_score != null ? ((selected.image_score ?? 0) * 100).toFixed(1) : null;
+      doc.setFontSize(8);
+      doc.setTextColor(...textMuted);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Credibility: ${credScore}%${imgScore ? `  ·  Visual Auth: ${imgScore}%` : ''}`, margin + 6, y + 16);
+      y += 27;
+
+      // ── Detection Summary ───────────────────────────────────────────────
+      drawSectionLabel('Detection Summary', indigo);
+
+      const stages = [
+        {
+          label: 'Stage 1 — Text Analysis',
+          value: selected?.stage_2_text_analysis?.text_label || 'N/A',
+          active: hasText,
+          color: indigo,
+          badge: selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor' ? 'FLAGGED' : 'PASSED',
+          badgeColor: selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor' ? red : emerald,
+        },
+        {
+          label: 'Stage 2 — Image Analysis',
+          value: selected?.stage_1_image_analysis?.combined_image_label || 'N/A',
+          sub: selected?.stage_1_image_analysis
+            ? `Semantic: ${selected.stage_1_image_analysis.semantic_label || 'N/A'}  ·  Forensic: ${selected.stage_1_image_analysis.forensic_label || 'N/A'}`
+            : null,
+          active: hasImage,
+          color: accent,
+          badge: hasImage ? (selected?.stage_1_image_analysis?.semantic_label || 'N/A') : 'NO IMAGE',
+          badgeColor: hasImage ? accent : textMuted,
+        },
+        {
+          label: 'Stage 3 — Multimodal Fusion',
+          value: (hasText && hasImage) ? (selected?.stage_3_multimodal_fusion?.multimodal_label || 'N/A') : 'N/A — Single Modality',
+          active: hasText && hasImage,
+          color: purple,
+          badge: (hasText && hasImage) ? 'FINAL VERDICT' : 'SINGLE MODE',
+          badgeColor: (hasText && hasImage) ? purple : textMuted,
+        },
+      ];
+
+      for (const stage of stages) {
+        checkNewPage(22);
+        const alpha = stage.active ? 1 : 0.35;
+        doc.setFillColor(...cardBg);
+        doc.setDrawColor(stage.active ? stage.color[0] : 40, stage.active ? stage.color[1] : 50, stage.active ? stage.color[2] : 80);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, y, contentW, stage.sub ? 20 : 16, 2, 2, 'FD');
+
+        doc.setFontSize(6.5);
+        doc.setTextColor(...(stage.active ? stage.color : textMuted));
+        doc.setFont(undefined, 'bold');
+        doc.text(stage.label, margin + 4, y + 5.5);
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(...(stage.active ? textWhite : textMuted));
+        doc.setFont(undefined, stage.active ? 'bold' : 'normal');
+        doc.text(stage.value, margin + 4, y + 11.5);
+
+        if (stage.sub) {
+          doc.setFontSize(6.5);
+          doc.setTextColor(...textMuted);
+          doc.setFont(undefined, 'normal');
+          doc.text(stage.sub, margin + 4, y + 17);
+        }
+
+        // badge
+        doc.setFontSize(6);
+        doc.setTextColor(...stage.badgeColor);
+        doc.setFont(undefined, 'bold');
+        doc.text(stage.badge, pageW - margin - 4, y + 5.5, { align: 'right' });
+
+        y += (stage.sub ? 20 : 16) + 3;
+      }
+
+      y += 4;
+
+      // ── XAI Insights ───────────────────────────────────────────────────
+      checkNewPage(10);
+      drawSectionLabel('XAI Evidence — Text Attribution', indigo);
+
+      if (xai.text_attributions && xai.text_attributions.length > 0) {
+        const maxW2 = Math.max(...xai.text_attributions.map(a => Math.abs(a.weight)), 0.001);
+        const barH = 5;
+        const labelW = 30;
+        const barAreaW = contentW - labelW - 22;
+
+        for (const attr of xai.text_attributions) {
+          checkNewPage(barH + 3);
+          const pct = Math.abs(attr.weight) / maxW2;
+          const isPos = attr.weight >= 0;
+          const barColor = isPos ? red : accent;
+
+          doc.setFontSize(7);
+          doc.setTextColor(...textWhite);
+          doc.setFont(undefined, 'normal');
+          doc.text(attr.token, margin + labelW - 2, y + barH - 1, { align: 'right' });
+
+          doc.setFillColor(20, 30, 60);
+          doc.roundedRect(margin + labelW, y, barAreaW, barH, 1, 1, 'F');
+
+          doc.setFillColor(...barColor);
+          doc.roundedRect(margin + labelW, y, barAreaW * pct, barH, 1, 1, 'F');
+
+          doc.setFontSize(6.5);
+          doc.setTextColor(...(isPos ? red : accent));
+          doc.text(`${isPos ? '+' : ''}${attr.weight.toFixed(3)}`, margin + labelW + barAreaW + 2, y + barH - 1);
+
+          y += barH + 2;
+        }
+
+        y += 3;
+        doc.setFontSize(6);
+        doc.setTextColor(...textMuted);
+        doc.text('Red = pushes toward disaster · Blue = pushes against · Bar length = relative importance', margin, y);
+        y += 7;
+      } else if (xai.text_weights && xai.text_weights.length > 0) {
+        checkNewPage(14);
+        drawCard(12);
+        doc.setFontSize(7.5);
+        doc.setTextColor(...textWhite);
+        doc.text('Keyword Signals: ' + xai.text_weights.join(', '), margin + 4, y + 7);
+        y += 16;
+      } else {
+        checkNewPage(12);
+        drawCard(10);
+        doc.setFontSize(7.5);
+        doc.setTextColor(...textMuted);
+        doc.text('No text attributions available for this scan.', margin + 4, y + 6.5);
+        y += 14;
+      }
+
+      // ── Logic Transparency ─────────────────────────────────────────────
+      checkNewPage(10);
+      drawSectionLabel('Logic Transparency', purple);
+
+      const expLines = doc.splitTextToSize(`"${explanationText}"`, contentW - 8);
+      const expH = expLines.length * 4.5 + 10;
+      checkNewPage(expH);
+      drawCard(expH);
+      doc.setFontSize(8);
+      doc.setTextColor(200, 210, 240);
+      doc.setFont(undefined, 'italic');
+      doc.text(expLines, margin + 4, y + 6);
+      doc.setFont(undefined, 'normal');
+      y += expH + 4;
+
+      // Text evidence summary
+      if (xai.text_attributions && xai.text_attributions.length > 0) {
+        const top = [...xai.text_attributions].sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0, 3);
+        const forDisaster = top.filter(t => t.weight > 0);
+        const against = top.filter(t => t.weight < 0);
+
+        checkNewPage(16);
+        drawCard(14, cardBg, indigo);
+        doc.setFontSize(6.5);
+        doc.setTextColor(...indigo);
+        doc.setFont(undefined, 'bold');
+        doc.text('📝 TEXT EVIDENCE', margin + 4, y + 5);
+        doc.setFont(undefined, 'normal');
+        let lineY = y + 10;
+        if (forDisaster.length > 0) {
+          doc.setTextColor(...red);
+          doc.text('Disaster: ', margin + 4, lineY);
+          doc.setTextColor(...textWhite);
+          doc.text(forDisaster.map(t => `"${t.token}" (+${t.weight.toFixed(2)})`).join(', '), margin + 20, lineY);
+          lineY += 4;
+        }
+        if (against.length > 0) {
+          doc.setTextColor(...accent);
+          doc.text('Against: ', margin + 4, lineY);
+          doc.setTextColor(...textWhite);
+          doc.text(against.map(t => `"${t.token}" (${t.weight.toFixed(2)})`).join(', '), margin + 20, lineY);
+        }
+        y += 18;
+      }
+
+      if (hasImage) {
+        checkNewPage(14);
+        drawCard(12, cardBg, purple);
+        doc.setFontSize(6.5);
+        doc.setTextColor(...purple);
+        doc.setFont(undefined, 'bold');
+        doc.text('🖼 IMAGE EVIDENCE', margin + 4, y + 5);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(...textWhite);
+        doc.text(
+          `Semantic: ${selected?.stage_1_image_analysis?.semantic_label || 'N/A'}   ·   Forensic: ${selected?.stage_1_image_analysis?.forensic_label || 'N/A'}   ·   Auth Score: ${imgScore}%`,
+          margin + 4, y + 10
+        );
+        y += 16;
+      }
+
+      if (xai.dominant_modality) {
+        checkNewPage(12);
+        const dColor = xai.dominant_modality.toLowerCase() === 'image' ? red : purple;
+        drawCard(10, cardBg, dColor);
+        doc.setFontSize(6.5);
+        doc.setTextColor(...dColor);
+        doc.setFont(undefined, 'bold');
+        doc.text('⚡ DECISION DRIVER', margin + 4, y + 5);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(...textWhite);
+        doc.text(`The ${xai.dominant_modality} modality had stronger evidence and primarily drove this verdict.`, margin + 4, y + 9);
+        y += 14;
+      }
+
+      // ── Heatmap Info ──────────────────────────────────────────────────
+      if (hasHeatmap) {
+        y += 4;
+        checkNewPage(10);
+        drawSectionLabel('Visual Saliency Analysis', accent);
+
+        checkNewPage(22);
+        drawCard(20);
+        doc.setFontSize(8);
+        doc.setTextColor(...textWhite);
+        doc.setFont(undefined, 'bold');
+        doc.text('Grad-CAM / SHAP Visual Heatmap', margin + 4, y + 7);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(...textMuted);
+        const heatDesc = [
+          `Method: ${getHeatmapMethodLabel(xai.heatmap_method) || 'N/A'}`,
+          `Status: ${xai.heatmap_status || 'N/A'}`,
+          `Dominant Modality: ${xai.dominant_modality || 'N/A'}`,
+        ].join('   ·   ');
+        doc.text(heatDesc, margin + 4, y + 13);
+        doc.setFontSize(6.5);
+        doc.setTextColor(accent[0], accent[1], accent[2]);
+        doc.text('Red regions in heatmap = high-evidence disaster zones · Boxes = top decision areas', margin + 4, y + 18);
+        y += 24;
+      }
+
+      // ── Pipeline Audit Trail ──────────────────────────────────────────
+      y += 2;
+      checkNewPage(10);
+      drawSectionLabel('Pipeline Audit Trail', purple);
+
+      checkNewPage(58);
+      drawCard(56, cardBg, [50, 30, 80]);
+      const pipeStages = [
+        { label: 'Stage 1 — Text Analysis (RoBERTa)', result: selected?.stage_2_text_analysis?.text_label || 'N/A', active: hasText, color: indigo },
+        { label: 'Stage 2 — Image Analysis (EfficientNet + Forensic)', result: selected?.stage_1_image_analysis?.combined_image_label || 'N/A', active: hasImage, color: accent },
+        { label: 'Stage 3 — Multimodal Fusion (CLIP Cross-Modal)', result: (hasText && hasImage) ? selected?.stage_3_multimodal_fusion?.multimodal_label || 'N/A' : 'N/A — Single Modality', active: hasText && hasImage, color: purple },
+      ];
+
+      let pipeY = y + 6;
+      for (let i = 0; i < pipeStages.length; i++) {
+        const ps = pipeStages[i];
+        doc.setFillColor(ps.active ? ps.color[0] : 40, ps.active ? ps.color[1] : 50, ps.active ? ps.color[2] : 80);
+        doc.circle(margin + 8, pipeY + 3, 2.5, 'F');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...(ps.active ? ps.color : textMuted));
+        doc.setFont(undefined, 'bold');
+        doc.text(ps.label, margin + 14, pipeY + 2);
+        doc.setFontSize(8);
+        doc.setTextColor(...(ps.active ? textWhite : textMuted));
+        doc.setFont(undefined, ps.active ? 'bold' : 'normal');
+        doc.text(ps.result, margin + 14, pipeY + 7);
+        if (i < pipeStages.length - 1) {
+          doc.setDrawColor(...textMuted);
+          doc.setLineWidth(0.2);
+          doc.line(margin + 8, pipeY + 5.5, margin + 8, pipeY + 14);
+        }
+        pipeY += 17;
+      }
+      y += 60;
+
+      // ── Score Summary ─────────────────────────────────────────────────
+      checkNewPage(28);
+      drawSectionLabel('Score Summary', emerald);
+      drawCard(22);
+
+      const scores = [
+        { label: 'Credibility Score', value: credScore + '%', color: emerald },
+        imgScore ? { label: 'Visual Authenticity', value: imgScore + '%', color: purple } : null,
+        selected?.stage_3_multimodal_fusion?.fusion_score != null
+          ? { label: 'Fusion Score', value: ((selected.stage_3_multimodal_fusion.fusion_score ?? 0) * 100).toFixed(1) + '%', color: accent }
+          : null,
+      ].filter(Boolean);
+
+      const colW = contentW / scores.length;
+      scores.forEach((s, i) => {
+        const cx = margin + colW * i + colW / 2;
+        doc.setFontSize(6.5);
+        doc.setTextColor(...s.color);
+        doc.setFont(undefined, 'bold');
+        doc.text(s.label.toUpperCase(), cx, y + 7, { align: 'center' });
+        doc.setFontSize(14);
+        doc.setTextColor(...textWhite);
+        doc.text(s.value, cx, y + 17, { align: 'center' });
+      });
+      y += 26;
+
+      // ── Footer ────────────────────────────────────────────────────────
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(6.5);
+        doc.setTextColor(...textMuted);
+        doc.text(
+          `FactFusion Forensic Report  ·  Page ${p} of ${totalPages}  ·  Powered by RoBERTa + EfficientNet + CLIP`,
+          pageW / 2, pageH - 5, { align: 'center' }
+        );
+      }
+
+      doc.save(`FactFusion_Report_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error('Report generation failed:', err);
+      alert('Failed to generate report. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // Block A: Fetch history once on mount
   useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
     const fetchRecords = async () => {
       try {
         setLoading(true);
@@ -57,33 +485,42 @@ const XAIInsights = () => {
           try {
             const user = JSON.parse(userString);
             if (user?.id && user?.role !== 'admin') {
-              url += `?user_id=${user.id}`;
+              url += `?user_id=${user.id}&limit=15`;
+            } else if (user?.role === 'admin') {
+              url += `?limit=15`;
             }
           } catch (e) {
             console.error('Error parsing user for XAI query:', e);
           }
         }
 
-        const res = await axios.get(url);
+        const res = await axios.get(url, { signal: controller.signal });
+        if (cancelled) return;
+
         const rawData = Array.isArray(res.data) ? res.data : [];
         const hasXai = (r) => r && r.xai_insights && Object.keys(r.xai_insights).length > 0;
         const withXai = rawData.filter(hasXai).slice(0, 15);
 
-        // FIX 3: Warn in console if records were silently trimmed
         if (rawData.filter(hasXai).length > 15) {
           console.warn(`[XAIInsights] ${rawData.length} records received — showing latest 15 only.`);
         }
 
         setRecords(withXai);
       } catch (err) {
+        if (axios.isCancel(err) || err?.name === 'CanceledError') return;
         console.error('Failed to fetch analysis history:', err);
         setRecords([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchRecords();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, []);
 
   // Block B: Select the right record when scanId or records change
@@ -216,71 +653,84 @@ const XAIInsights = () => {
         {!loading && records.length > 0 && (
           <div className="space-y-10">
 
-            {/* Selector */}
-            <div className="relative max-w-2xl">
-              <button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="w-full flex items-center justify-between gap-4 px-8 py-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-blue-500/30 hover:bg-white/[0.05] hover:shadow-[0_0_25px_rgba(59,130,246,0.1)] transition-all duration-300 text-left"
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="p-2.5 rounded-xl bg-blue-500/10">
-                    <Cpu size={18} className="text-blue-400" />
+            {/* Selector + Download Row */}
+            <div className="flex items-center gap-4">
+              <div className="relative max-w-2xl flex-1">
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="w-full flex items-center justify-between gap-4 px-8 py-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-blue-500/30 hover:bg-white/[0.05] hover:shadow-[0_0_25px_rgba(59,130,246,0.1)] transition-all duration-300 text-left"
+                >
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="p-2.5 rounded-xl bg-blue-500/10">
+                      <Cpu size={18} className="text-blue-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">
+                        Inspecting Analysis
+                      </p>
+                      <p className="text-sm font-bold text-white truncate">
+                        {getRecordLabel(selected, selectedIdx)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">
-                      Inspecting Analysis
-                    </p>
-                    <p className="text-sm font-bold text-white truncate">
-                      {getRecordLabel(selected, selectedIdx)}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs font-black uppercase px-3 py-1 rounded-lg border ${getVerdictBg(selected)} ${getVerdictColor(selected)}`}>
+                      {selected?.verdict || 'N/A'}
+                    </span>
+                    <ChevronDown
+                      size={18}
+                      className={`text-white/40 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+                    />
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs font-black uppercase px-3 py-1 rounded-lg border ${getVerdictBg(selected)} ${getVerdictColor(selected)}`}>
-                    {selected?.verdict || 'N/A'}
-                  </span>
-                  <ChevronDown
-                    size={18}
-                    className={`text-white/40 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
-                  />
-                </div>
-              </button>
+                </button>
 
-              <AnimatePresence>
-                {dropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="absolute z-50 w-full mt-2 rounded-2xl bg-[#0a1128] border border-white/10 shadow-2xl overflow-hidden max-h-72 overflow-y-auto"
-                  >
-                    {records.map((record, idx) => (
-                      <button
-                        key={record.id || record._id || idx}
-                        onClick={() => { setSelectedIdx(idx); setDropdownOpen(false); }}
-                        className={`w-full flex items-center gap-4 px-6 py-4 text-left hover:bg-blue-500/10 transition-all border-b border-white/5 last:border-b-0 ${idx === selectedIdx ? 'bg-blue-500/10' : ''}`}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="flex gap-1.5">
-                            <FileText size={14} className={record.text_snippet ? 'text-blue-400' : 'text-white/10'} />
-                            <ImageIcon size={14} className={record.image_ref ? 'text-indigo-400' : 'text-white/10'} />
+                <AnimatePresence>
+                  {dropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      className="absolute z-50 w-full mt-2 rounded-2xl bg-[#0a1128] border border-white/10 shadow-2xl overflow-hidden max-h-72 overflow-y-auto"
+                    >
+                      {records.map((record, idx) => (
+                        <button
+                          key={record.id || record._id || idx}
+                          onClick={() => { setSelectedIdx(idx); setDropdownOpen(false); }}
+                          className={`w-full flex items-center gap-4 px-6 py-4 text-left hover:bg-blue-500/10 transition-all border-b border-white/5 last:border-b-0 ${idx === selectedIdx ? 'bg-blue-500/10' : ''}`}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="flex gap-1.5">
+                              <FileText size={14} className={record.text_snippet ? 'text-blue-400' : 'text-white/10'} />
+                              <ImageIcon size={14} className={record.image_ref ? 'text-indigo-400' : 'text-white/10'} />
+                            </div>
+                            <span className="text-sm text-white/80 font-medium truncate">
+                              {getRecordLabel(record, idx)}
+                            </span>
                           </div>
-                          <span className="text-sm text-white/80 font-medium truncate">
-                            {getRecordLabel(record, idx)}
+                          {/* FIX 7: regex split handles em-dash and regular hyphen */}
+                          <span className={`text-[10px] font-black uppercase ${getVerdictColor(record)}`}>
+                            {getShortVerdict(record.verdict)}
                           </span>
-                        </div>
-                        {/* FIX 7: regex split handles em-dash and regular hyphen */}
-                        <span className={`text-[10px] font-black uppercase ${getVerdictColor(record)}`}>
-                          {getShortVerdict(record.verdict)}
-                        </span>
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-            {/* Evidence Display Panel */}
+              {/* Download Report Button */}
+              {selected && (
+                <button
+                  onClick={downloadFullReport}
+                  disabled={isDownloading}
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black uppercase tracking-[0.15em] text-xs transition-all shadow-lg shadow-blue-900/30 hover:-translate-y-0.5 flex-shrink-0"
+                  title="Download Full Forensic Report (PDF)"
+                >
+                  <Download size={16} />
+                  {isDownloading ? 'Generating…' : 'Download Report'}
+                </button>
+              )}
+            </div>
             <AnimatePresence mode="wait">
               {selectedIdx !== null && (
                 <motion.div

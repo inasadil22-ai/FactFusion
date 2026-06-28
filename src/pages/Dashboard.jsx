@@ -17,6 +17,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchData = async () => {
       try {
         const userString = localStorage.getItem('user');
@@ -26,21 +27,25 @@ const Dashboard = () => {
           try {
             const user = JSON.parse(userString);
             if (user && user.id && user.role !== 'admin') {
-              url += `?user_id=${user.id}`;
+              url += `?user_id=${user.id}&limit=50`;
+            } else {
+              url += `?limit=50`;
             }
           } catch (e) {
             console.error("Error parsing user for dashboard query:", e);
           }
         }
-        const response = await axios.get(url);
+        const response = await axios.get(url, { signal: controller.signal });
         setData(Array.isArray(response.data) ? response.data : []);
       } catch (err) {
+        if (axios.isCancel(err) || err?.name === 'CanceledError') return;
         console.error("Dashboard Fetch Error:", err);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
+    return () => controller.abort();
   }, []);
 
   // --- Multi-Modal Threat Logic ---
@@ -81,8 +86,22 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#020617] flex items-center justify-center text-white/50 font-mono tracking-widest text-xs uppercase animate-pulse">
-        Loading System Matrix...
+      <div className="min-h-screen bg-[#020617] text-white pt-28 px-6 pb-20">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-12">
+            <div className="h-12 w-64 rounded-2xl bg-white/5 animate-pulse mb-3" />
+            <div className="h-5 w-48 rounded-xl bg-white/[0.03] animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-36 rounded-[2.5rem] bg-white/[0.03] animate-pulse border border-white/5" />
+            ))}
+          </div>
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="h-72 rounded-[3rem] bg-white/[0.03] animate-pulse border border-white/5" />
+            <div className="lg:col-span-2 h-72 rounded-[3rem] bg-white/[0.03] animate-pulse border border-white/5" />
+          </div>
+        </div>
       </div>
     );
   }

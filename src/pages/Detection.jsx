@@ -5,11 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import {
   UploadCloud, Zap, FileText, Image as ImageIcon,
-  AlertTriangle, Download, ShieldAlert, Layers, ShieldCheck, X,
+  AlertTriangle, ShieldAlert, Layers, ShieldCheck, X,
   Fingerprint
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { classifyVerdict, SCORE_THRESHOLDS } from '../utils/verdict';
 
 
@@ -164,29 +162,12 @@ const Detection = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const fileInputRef = useRef(null);
-  const reportRef = useRef(null);
 
   const tabs = [
     { id: 'text', label: 'Text Only', icon: FileText },
     { id: 'image', label: 'Image Only', icon: ImageIcon },
     { id: 'multimodal', label: 'Multimodal', icon: Layers },
   ];
-
-  const downloadPDF = async () => {
-    if (!reportRef.current) return;
-    const canvas = await html2canvas(reportRef.current, {
-      backgroundColor: '#020617',
-      scale: 2,
-      useCORS: true,
-    });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`FactFusion_Forensic_Report_${Date.now()}.pdf`);
-  };
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -364,9 +345,27 @@ const Detection = () => {
         </section>
 
         <AnimatePresence>
-          {result && (
+          {loading && (
             <motion.div
-              ref={reportRef}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
+              <div className="h-24 rounded-[2.5rem] bg-white/[0.03] border border-white/5 animate-pulse" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-36 rounded-[2rem] bg-white/[0.03] border border-white/5 animate-pulse" />
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="h-48 rounded-[2rem] bg-white/[0.03] border border-white/5 animate-pulse" />
+                <div className="h-48 rounded-[2rem] bg-white/[0.03] border border-white/5 animate-pulse" />
+              </div>
+            </motion.div>
+          )}
+          {result && !loading && (
+            <motion.div
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               className="space-y-12"
@@ -422,13 +421,6 @@ const Detection = () => {
                       </div>
                     )}
 
-                    <button
-                      onClick={downloadPDF}
-                      className="p-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl flex-shrink-0 self-end md:self-center transition-all"
-                      title="Download Analysis Report"
-                    >
-                      <Download size={20} />
-                    </button>
                   </div>
                 );
               })()}

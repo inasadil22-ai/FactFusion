@@ -6,6 +6,7 @@ from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from werkzeug.utils import secure_filename
 
+
 from config import DevelopmentConfig, ProductionConfig
 from database import initialize_db, mongo
 
@@ -55,6 +56,13 @@ db = None
 try:
     db = initialize_db(app)
     print("✅ Database initialized successfully!")
+    # Compound index for fast per-user history queries
+    db.analysis.create_index(
+        [("user_id", 1), ("created_at", -1)],
+        name="user_history_idx",
+        background=True
+    )
+    print("✅ MongoDB index ensured.")
 except Exception as e:
     print(f"❌ Database Initialization Error: {e}")
 
@@ -256,10 +264,16 @@ def list_analysis_history():
         return jsonify({'error': 'Database not connected'}), 500
     try:
         user_id = request.args.get('user_id')
+        limit = min(int(request.args.get('limit', 20)), 50)  # default 20, hard cap 50
+
         query = {}
         if user_id:
             query["user_id"] = user_id
-        records = list(db.analysis.find(query).sort("created_at", -1))
+
+        # Exclude heavy heatmap matrix — only needed on XAI page for a single record
+        projection = {'xai_insights.visual_heatmap': 0}
+
+        records = list(db.analysis.find(query, projection).sort("created_at", -1).limit(limit))
         data = [clean_mongo_record(r) for r in records]
         return jsonify(data), 200
     except Exception as e:

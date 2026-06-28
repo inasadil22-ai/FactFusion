@@ -27,7 +27,7 @@ const AnalysisHistory = () => {
     import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
 
   // ── FETCH ────────────────────────────────────────────────────────────────
-  const fetchHistory = async () => {
+  const fetchHistory = async (signal) => {
     setLoading(true);
     try {
       const userString = localStorage.getItem('user');
@@ -36,16 +36,19 @@ const AnalysisHistory = () => {
         try {
           const user = JSON.parse(userString);
           if (user && user.id && user.role !== 'admin') {
-            url += `?user_id=${user.id}`;
+            url += `?user_id=${user.id}&limit=20`;
+          } else {
+            url += `?limit=20`;
           }
         } catch (e) {
           console.error("Error parsing user for history query:", e);
         }
       }
-      const response = await axios.get(url);
+      const response = await axios.get(url, { signal });
       const data = Array.isArray(response.data) ? response.data : [];
       setHistory(data);
     } catch (err) {
+      if (axios.isCancel(err) || err?.name === 'CanceledError') return;
       console.error("Connection Error:", err.message);
       setHistory([]);
     } finally {
@@ -53,7 +56,11 @@ const AnalysisHistory = () => {
     }
   };
 
-  useEffect(() => { fetchHistory(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchHistory(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   // ── DELETE LOGIC ─────────────────────────────────────────────────────────
   const deleteOne = async (id) => {
