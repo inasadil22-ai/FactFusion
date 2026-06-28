@@ -209,8 +209,8 @@ class MultimodalService:
             forensic_uncertain = False
             image_specific_label = None
             flags = []
-            sem_conf_val = 0.5   # real semantic model confidence (filled below)
-            for_conf_val = 0.5   # real forensic model confidence (filled below)
+            sem_conf_val = 0.5
+            for_conf_val = 0.5
 
             if has_image:
                 img_tensor = self.preprocess_image(image_path)
@@ -219,7 +219,7 @@ class MultimodalService:
                     with torch.no_grad():
                         sem_probs = torch.softmax(self.semantic_model(img_tensor), dim=1)[0]
                     sem_pred     = sem_probs.argmax().item()
-                    sem_conf_val = sem_probs[sem_pred].item()   # real confidence
+                    sem_conf_val = sem_probs[sem_pred].item()
                 elif self.clip is not None:
                     try:
                         disaster_label = 'a photo showing disaster, flood, fire, earthquake or crisis event'
@@ -228,7 +228,7 @@ class MultimodalService:
                         top = clip_res[0]
                         print(f"CLIP semantic result: {top['label'][:40]} — score={top['score']:.2f}")
                         sem_pred     = 0 if (top['label'] == disaster_label and top['score'] > 0.45) else 1
-                        sem_conf_val = top['score']   # real CLIP confidence
+                        sem_conf_val = top['score']
                     except Exception as e:
                         print(f"CLIP fallback failed: {e}")
                         sem_pred = 1
@@ -243,7 +243,7 @@ class MultimodalService:
                         with torch.no_grad():
                             for_probs = torch.softmax(self.forensic_model(img_tensor), dim=1)[0]
                         for_conf, for_pred = for_probs.max(0)
-                        for_conf_val = for_conf.item()          # real confidence
+                        for_conf_val = for_conf.item()
                         image_analysis["forensic_label"] = self.forensic_classes[for_pred.item()]
                         forensic_uncertain = for_conf_val < 0.55
                     else:
@@ -275,7 +275,7 @@ class MultimodalService:
             # --- FINAL VERDICT LOGIC ---
             multimodal_label = "UNCERTAIN"
             reasoning = "Analysis was inconclusive based on the available signals."
-            fusion_score = None  # only meaningful when both modalities are present (set below)
+            fusion_score = None
             
             if not has_image and not has_text:
                 multimodal_label = "NO DATA"
@@ -295,11 +295,22 @@ class MultimodalService:
                     if image_specific_label.lower() not in caption.lower():
                         cross_modal_mismatch = True
 
+                # img_text_mismatch covers ALL ways a content mismatch surfaces:
+                # (a) cross_modal_mismatch — CLIP's specific label disagrees with the caption
+                # (b) non-crisis image paired with informative disaster text
+                # (c) [FIX] disaster image paired with non-informative/unrelated caption
+                img_text_mismatch = (
+                    cross_modal_mismatch
+                    or (not img_is_disaster and text_analysis["text_label"] == "Informative")
+                    or (img_is_disaster and text_analysis["text_label"] not in ("Informative", "N/A"))
+                )
+
                 flags = []
                 if image_analysis["forensic_label"] == "Tampered":    flags.append("Manipulated Image")
                 if has_temporal_issue:                                 flags.append("Old Content")
-                if cross_modal_mismatch:                               flags.append("Mismatch")
+                if img_text_mismatch:                                  flags.append("Mismatch")
                 if is_unverified_rumor:                                flags.append("Unverified Rumor")
+                if forensic_uncertain:                                 flags.append("Forensic Uncertain")  # FIX
 
                 if len(flags) >= 2:
                     multimodal_label = "HIGH RISK — Multiple Flags Detected"
@@ -332,27 +343,19 @@ class MultimodalService:
                     multimodal_label = "CREDIBLE — Real Disaster, Authentic"
                     reasoning = "Consistent, authentic evidence from both visual and textual modalities."
 
-                # fusion_score: how much the two modalities agree, based on the same
-                # flags the verdict above was just decided from (0 flags = full agreement,
-                # each flag chips away at agreement). Not a separate invented signal —
-                # just the existing fusion logic expressed as a number instead of only a label.
                 fusion_score = round(max(0.0, 1.0 - 0.25 * len(flags)), 3)
 
             # --- SCORES from real model confidences ---
             if has_image:
-                # image_score: forensic confidence if disaster detected, else semantic confidence
                 if img_is_disaster:
-                    # Authentic → high score; Tampered → low score (inverted)
                     image_score = for_conf_val if image_analysis.get("forensic_label") == "Authentic" else round(1.0 - for_conf_val, 3)
                 else:
-                    image_score = round(1.0 - sem_conf_val, 3)  # non-crisis → low authenticity concern
+                    image_score = round(1.0 - sem_conf_val, 3)
             else:
                 image_score = 0.0
 
-            # credibility_score: blend text confidence + image confidence based on modalities present
             text_conf = text_result.get("confidence", 0.5) if has_text else None
             if has_image and has_text:
-                # Fusion: weight image forensic + text confidence equally
                 img_contrib  = for_conf_val if img_is_disaster else sem_conf_val
                 credibility_score = round((img_contrib + (text_conf or 0.5)) / 2.0, 3)
             elif has_image:
@@ -362,7 +365,6 @@ class MultimodalService:
             else:
                 credibility_score = 0.5
 
-            # For MISINFORMATION / HIGH RISK verdicts, invert so score reflects credibility (low = bad)
             if any(tag in multimodal_label for tag in ("MISINFORMATION", "HIGH RISK", "SUSPICIOUS")):
                 credibility_score = round(1.0 - credibility_score, 3)
 
@@ -382,11 +384,10 @@ class MultimodalService:
                 "text_attributions": [],
                 "visual_heatmap":    None,
                 "heatmap_status":    "UNAVAILABLE",
-                "heatmap_method":    None,          # NEW: "shap" | "grad-cam" | "clip"
-                "dominant_modality": None,          # NEW: "image" | "text"
+                "heatmap_method":    None,
+                "dominant_modality": None,
             }
 
-            # TEXT ATTRIBUTION — SHAP primary, heuristic fallback (handled inside XAIEngine)
             if has_text:
                 if self.text_model_service and self.text_model_service.tokenizer:
                     token_weights = self.xai_engine.extract_text_attributions(
@@ -395,7 +396,6 @@ class MultimodalService:
                     )
                     xai_payload["text_attributions"] = token_weights
                 else:
-                    # Keyword fallback when text model not loaded at all
                     fallback_keywords = getattr(self.text_model_service, 'disaster_keywords', []) + \
                                         getattr(self.text_model_service, 'uncertain_words', [])
                     words = caption.lower().split()
@@ -408,7 +408,6 @@ class MultimodalService:
                             keyword_attrs.append({"token": clean, "weight": 0.3})
                     xai_payload["text_attributions"] = keyword_attrs[:10]
 
-            # IMAGE HEATMAP — SHAP → Grad-CAM → CLIP (handled inside XAIEngine)
             if has_image:
                 if img_is_disaster and self.semantic_model:
                     target_layer = self.semantic_model.backbone.conv_head
@@ -422,7 +421,6 @@ class MultimodalService:
                     else:
                         xai_payload["heatmap_status"] = status
                 elif self.clip is not None:
-                    # CLIP patch fallback when semantic model not loaded
                     try:
                         heatmap_matrix = self._generate_clip_heatmap(image_path)
                         if heatmap_matrix is not None:
@@ -434,7 +432,6 @@ class MultimodalService:
                     except Exception as e:
                         xai_payload["heatmap_status"] = f"CLIP HEATMAP FAILED: {str(e)}"
 
-            # ── DOMINANT MODALITY (new — which input drove the decision) ──────
             img_score_xai  = float(np.mean(np.abs(xai_payload["visual_heatmap"])))  \
                              if xai_payload["visual_heatmap"] else 0.0
             txt_score_xai  = float(np.mean([abs(t["weight"]) for t in xai_payload["text_attributions"]])) \
@@ -449,12 +446,12 @@ class MultimodalService:
                 "stage_3_multimodal_fusion": {
                     "multimodal_label": multimodal_label,
                     "reasoning":        reasoning,
-                    "fusion_score":     fusion_score  # NEW: real agreement score, only set when both modalities present
+                    "fusion_score":     fusion_score
                 },
                 "verdict":           multimodal_label,
                 "credibility_score": credibility_score,
                 "image_score":       image_score,
-                "fusion_score":      fusion_score,  # NEW: surfaced at top level too, for convenience
+                "fusion_score":      fusion_score,
                 "xai_insights": {
                     "explanation":       explanation_text,
                     "audit_path":        audit_path_text,
@@ -462,8 +459,8 @@ class MultimodalService:
                     "text_attributions": xai_payload["text_attributions"],
                     "visual_heatmap":    xai_payload["visual_heatmap"],
                     "heatmap_status":    xai_payload["heatmap_status"],
-                    "heatmap_method":    xai_payload["heatmap_method"],    # NEW
-                    "dominant_modality": xai_payload["dominant_modality"], # NEW
+                    "heatmap_method":    xai_payload["heatmap_method"],
+                    "dominant_modality": xai_payload["dominant_modality"],
                 }
             }
         except Exception as e:
