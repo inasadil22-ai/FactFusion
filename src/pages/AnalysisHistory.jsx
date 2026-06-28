@@ -65,7 +65,7 @@ const AnalysisHistory = () => {
   // ── DELETE LOGIC ─────────────────────────────────────────────────────────
   const deleteOne = async (id) => {
     try {
-      await axios.delete(`${getApiBase()}/api/v1/analysis/${id}`);
+      await axios.delete(`${getApiBase()}/api/v1/analysis-history/${id}`);
       setHistory(prev => prev.filter(item => (item.id || item._id) !== id));
       setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
     } catch (err) {
@@ -80,7 +80,7 @@ const AnalysisHistory = () => {
     setDeleting(true);
     try {
       await Promise.all([...selectedIds].map(id =>
-        axios.delete(`${getApiBase()}/api/v1/analysis/${id}`)
+        axios.delete(`${getApiBase()}/api/v1/analysis-history/${id}`)
       ));
       setHistory(prev => prev.filter(item => !selectedIds.has(item.id || item._id)));
       setSelectedIds(new Set());
@@ -97,7 +97,7 @@ const AnalysisHistory = () => {
     setDeleting(true);
     try {
       await Promise.all(history.map(item =>
-        axios.delete(`${getApiBase()}/api/v1/analysis/${item.id || item._id}`)
+        axios.delete(`${getApiBase()}/api/v1/analysis-history/${item.id || item._id}`)
       ));
       setHistory([]);
       setSelectedIds(new Set());
