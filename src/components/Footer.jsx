@@ -47,7 +47,7 @@ const Footer = () => {
             </h4>
             <ul className="space-y-4 text-blue-100/40 text-sm font-medium">
               <li><Link to="/detection" className="hover:text-blue-400 transition-all duration-300">Disaster Detection</Link></li>
-              <li><Link to="/xai" className="hover:text-purple-400 transition-all duration-300">Explainability</Link></li>
+              <li><Link to="/xai" className="hover:text-purple-400 transition-all duration-300">Explainability </Link></li>
               <li><Link to="/about" className="hover:text-blue-400 transition-all duration-300">About</Link></li>
             </ul>
           </div>
@@ -56,7 +56,7 @@ const Footer = () => {
           <div>
             <h4 className="text-white font-bold mb-6 text-sm uppercase tracking-widest flex items-center gap-2">
               <GraduationCap className="w-4 h-4 text-indigo-400" />
-              Tech Stack
+              Project Info
             </h4>
             <div className="space-y-4">
               <div className="flex items-center gap-3 text-[11px] text-blue-100/40 font-mono">
@@ -65,16 +65,17 @@ const Footer = () => {
               </div>
               <div className="flex items-center gap-3 text-[11px] text-blue-100/40 font-mono">
                 <Database size={14} className="text-blue-500" />
-                <span>PyTorch / XAI</span>
+                <span>Python / PyTorch / XAI</span>
               </div>
               <div className="flex items-center gap-3 text-[11px] text-blue-100/40 font-mono">
                 <Server size={14} className="text-blue-500" />
-                <span>FastAPI / Supabase</span>
+                <span>Node.js / MongoDB</span>
               </div>
 
               <div className="pt-2">
                 <div className="flex justify-between text-[9px] text-blue-400/60 uppercase mb-1 font-bold">
-                  <span>FYP 2026</span>
+                  <span>Development Phase</span>
+                  <span>100%</span>
                 </div>
                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                   <div className="w-[100%] h-full bg-gradient-to-r from-blue-600 to-indigo-500" />
