@@ -130,7 +130,7 @@ const Dashboard = () => {
             { label: 'Total Scans', val: stats.total, icon: Database, color: 'text-blue-400' },
             { label: 'Avg Confidence', val: `${stats.avgConfidence}%`, icon: Zap, color: 'text-yellow-400' },
             { label: 'Threats Blocked', val: stats.suspicious, icon: ShieldCheck, color: 'text-red-400' },
-            { label: 'Engine Latency', val: '0.8s', icon: Cpu, color: 'text-purple-400' },
+            { label: 'Avg Latency', val: '~0.8s', icon: Cpu, color: 'text-purple-400' },
           ].map((stat, i) => (
             <motion.div
               key={i}
@@ -218,7 +218,7 @@ const Dashboard = () => {
             <div>
               <h4 className="text-xl font-black mb-1 italic tracking-tight">Fusion Intelligence Report</h4>
               <p className="text-blue-100/40 text-sm max-w-xl font-medium leading-relaxed">
-                System detected {stats.mismatchThreats} Semantic Mismatches today. This indicates certain text claims are not contextually or visually supported by paired imagery.
+                System has detected {stats.mismatchThreats} Semantic Mismatches across all scans. This indicates certain text claims are not contextually or visually supported by paired imagery.
               </p>
             </div>
           </div>

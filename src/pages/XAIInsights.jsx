@@ -172,8 +172,7 @@ const XAIInsights = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg text-blue-100/60 max-w-2xl leading-relaxed"
           >
-            FactFusion provides cryptographic evidence for every detection. We map attention weights
-            to reveal the data points that triggered the system.
+            FactFusion provides explainable evidence for every detection. We use SHAP attributions and Grad-CAM heatmaps to reveal which tokens and image regions triggered each verdict.
           </motion.p>
         </header>
 
@@ -322,7 +321,7 @@ const XAIInsights = () => {
                                   {hasNeg && (
                                     <span className="flex items-center gap-1 text-blue-400">
                                       <span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" />
-                                      Against
+                                      Against Disaster
                                     </span>
                                   )}
                                 </div>
@@ -350,7 +349,7 @@ const XAIInsights = () => {
                                 })}
                               </div>
                               <p className="text-[9px] text-white/30 mt-3">
-                                Red = pushes toward disaster · Blue = pushes against · Length = relative importance
+                                Red = pushes toward disaster · Blue = pushes against disaster · Length = relative importance
                               </p>
                             </div>
                           );

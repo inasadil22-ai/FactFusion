@@ -7,7 +7,8 @@ import {
 } from 'recharts';
 import {
   RefreshCw, Search, FileText,
-  Image as ImageIcon, AlertTriangle, CheckCircle2, Shield
+  Image as ImageIcon, AlertTriangle, CheckCircle2, Shield,
+  Trash2, X
 } from 'lucide-react';
 
 // Shared Util Import
@@ -17,15 +18,20 @@ const AnalysisHistory = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const COLORS = ['#10b981', '#ef4444', '#9ca3af'];
 
+  const getApiBase = () =>
+    import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
+
+  // ── FETCH ────────────────────────────────────────────────────────────────
   const fetchHistory = async () => {
     setLoading(true);
     try {
       const userString = localStorage.getItem('user');
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
-      let url = `${apiBase}/api/v1/analysis-history`;
+      let url = `${getApiBase()}/api/v1/analysis-history`;
       if (userString) {
         try {
           const user = JSON.parse(userString);
@@ -49,6 +55,71 @@ const AnalysisHistory = () => {
 
   useEffect(() => { fetchHistory(); }, []);
 
+  // ── DELETE LOGIC ─────────────────────────────────────────────────────────
+  const deleteOne = async (id) => {
+    try {
+      await axios.delete(`${getApiBase()}/api/v1/analysis/${id}`);
+      setHistory(prev => prev.filter(item => (item.id || item._id) !== id));
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete record. Please try again.');
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected record${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await Promise.all([...selectedIds].map(id =>
+        axios.delete(`${getApiBase()}/api/v1/analysis/${id}`)
+      ));
+      setHistory(prev => prev.filter(item => !selectedIds.has(item.id || item._id)));
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+      alert('Some records could not be deleted. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const clearAll = async () => {
+    if (!window.confirm(`Delete ALL ${history.length} records? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await Promise.all(history.map(item =>
+        axios.delete(`${getApiBase()}/api/v1/analysis/${item.id || item._id}`)
+      ));
+      setHistory([]);
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error('Clear all failed:', err);
+      alert('Some records could not be deleted. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // ── SELECTION LOGIC ───────────────────────────────────────────────────────
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (filteredHistory) => {
+    if (selectedIds.size === filteredHistory.length && filteredHistory.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredHistory.map(item => item.id || item._id)));
+    }
+  };
+
+  // ── DERIVED DATA ──────────────────────────────────────────────────────────
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
       const query = searchQuery.toLowerCase();
@@ -69,23 +140,16 @@ const AnalysisHistory = () => {
   const chartData = useMemo(() => {
     return history.slice(0, 10).reverse().map((item, index) => {
       let label = "";
-
       if (item.text_snippet) {
         const words = item.text_snippet.split(' ');
-        if (words.length > 2) {
-          label = words.slice(0, 2).join(' ') + '...';
-        } else {
-          label = item.text_snippet.substring(0, 15) + (item.text_snippet.length > 15 ? '...' : '');
-        }
+        label = words.length > 2 ? words.slice(0, 2).join(' ') + '...' : item.text_snippet.substring(0, 15) + (item.text_snippet.length > 15 ? '...' : '');
       } else if (item.image_ref) {
         label = "Image Content";
       } else {
         label = `Analysis #${index + 1}`;
       }
-
       const confidence = item.credibility_score || 0;
       const percentage = Math.round(confidence * 100);
-
       return {
         name: label,
         score: percentage === 0 ? 2 : percentage,
@@ -95,6 +159,9 @@ const AnalysisHistory = () => {
     });
   }, [history]);
 
+  const allSelectedOnPage = filteredHistory.length > 0 && selectedIds.size === filteredHistory.length;
+
+  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#020617] text-white pt-32 px-6 pb-20 selection:bg-blue-500/30 font-sans">
       <div className="max-w-7xl mx-auto">
@@ -124,7 +191,7 @@ const AnalysisHistory = () => {
           </header>
 
           {/* Search/Controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-blue-500 transition-colors" size={18} />
               <input
@@ -132,17 +199,58 @@ const AnalysisHistory = () => {
                 placeholder="Search verdicts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-4 w-full md:w-[350px] focus:border-blue-500/50 outline-none transition-all text-sm font-bold"
+                className="bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-4 w-full md:w-[280px] focus:border-blue-500/50 outline-none transition-all text-sm font-bold"
               />
             </div>
             <button
               onClick={fetchHistory}
               className="p-4 bg-blue-600/10 border border-blue-500/20 rounded-2xl hover:bg-blue-600/20 text-blue-400 transition-all active:scale-95"
+              title="Refresh"
             >
               <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
             </button>
+            {/* Clear All */}
+            {history.length > 0 && (
+              <button
+                onClick={clearAll}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-4 bg-red-500/10 border border-red-500/20 rounded-2xl hover:bg-red-500/20 text-red-400 transition-all active:scale-95 text-xs font-black uppercase tracking-widest disabled:opacity-50"
+                title="Delete all records"
+              >
+                <Trash2 size={16} /> Clear All
+              </button>
+            )}
           </div>
         </div>
+
+        {/* --- Bulk Action Bar (appears when items selected) --- */}
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between gap-4 mb-6 px-6 py-4 bg-red-500/10 border border-red-500/20 rounded-2xl"
+          >
+            <span className="text-sm font-black text-red-300">
+              {selectedIds.size} record{selectedIds.size > 1 ? 's' : ''} selected
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={deleteSelected}
+                disabled={deleting}
+                className="flex items-center gap-2 px-5 py-2.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-xl text-red-300 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+              >
+                <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete Selected'}
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="p-2 rounded-xl hover:bg-white/10 text-white/40 transition-all"
+                title="Clear selection"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* --- Analytics Dashboard --- */}
         <div className="grid lg:grid-cols-3 gap-6 mb-12">
@@ -224,23 +332,48 @@ const AnalysisHistory = () => {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-white/5 border-b border-white/10">
+                  {/* Select All checkbox */}
+                  <th className="px-6 py-6 w-12">
+                    <input
+                      type="checkbox"
+                      checked={allSelectedOnPage}
+                      onChange={() => toggleSelectAll(filteredHistory)}
+                      className="w-4 h-4 accent-blue-500 cursor-pointer"
+                      title="Select all"
+                    />
+                  </th>
                   <th className="px-8 py-6 text-xs font-bold text-blue-400 uppercase tracking-widest">Source Content</th>
                   <th className="px-8 py-6 text-xs font-bold text-blue-400 uppercase tracking-widest text-center">Modality</th>
                   <th className="px-8 py-6 text-xs font-bold text-blue-400 uppercase tracking-widest">Analysis Insights</th>
                   <th className="px-8 py-6 text-xs font-bold text-blue-400 uppercase tracking-widest text-right">Credibility</th>
+                  <th className="px-6 py-6 w-12" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {loading ? (
-                  <tr><td colSpan="4" className="py-32 text-center text-white/10 font-black uppercase text-xs tracking-widest animate-pulse">Neural Synchronization...</td></tr>
+                  <tr><td colSpan="6" className="py-32 text-center text-white/10 font-black uppercase text-xs tracking-widest animate-pulse">Neural Synchronization...</td></tr>
                 ) : filteredHistory.length === 0 ? (
-                  <tr><td colSpan="4" className="py-20 text-center text-white/30 italic font-medium">No archive records found.</td></tr>
+                  <tr><td colSpan="6" className="py-20 text-center text-white/30 italic font-medium">No archive records found.</td></tr>
                 ) : filteredHistory.map((item, idx) => {
+                  const id = item.id || item._id;
+                  const isSelected = selectedIds.has(id);
                   const cat = getVerdictCategory(item.verdict);
                   const catColor = getVerdictColor(cat);
 
                   return (
-                    <tr key={item.id || idx} className="group hover:bg-blue-500/[0.04] transition-all duration-300">
+                    <tr
+                      key={id || idx}
+                      className={`group transition-all duration-300 ${isSelected ? 'bg-red-500/[0.06]' : 'hover:bg-blue-500/[0.04]'}`}
+                    >
+                      {/* Checkbox */}
+                      <td className="px-6 py-6">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(id)}
+                          className="w-4 h-4 accent-blue-500 cursor-pointer"
+                        />
+                      </td>
                       <td className="px-8 py-6">
                         <div className="flex flex-col">
                           <span className="text-sm text-white/90 font-bold line-clamp-1 italic mb-1 group-hover:text-blue-400 transition-colors">
@@ -274,6 +407,18 @@ const AnalysisHistory = () => {
                           {((item.credibility_score || 0) * 100).toFixed(0)}%
                         </span>
                       </td>
+                      {/* Single delete */}
+                      <td className="px-6 py-6">
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Delete this record? This cannot be undone.')) deleteOne(id);
+                          }}
+                          className="p-2 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-all"
+                          title="Delete record"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -281,6 +426,7 @@ const AnalysisHistory = () => {
             </table>
           </div>
         </div>
+
       </div>
     </div>
   );

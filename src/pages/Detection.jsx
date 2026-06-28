@@ -242,7 +242,7 @@ const Detection = () => {
       });
     } catch (error) {
       console.error('API Error:', error);
-      alert('Failed to connect to AI server. Ensure the backend is running.');
+      alert('Analysis failed. Please try again or check your connection.');
     } finally {
       setLoading(false);
     }
@@ -261,7 +261,7 @@ const Detection = () => {
           >
             <ShieldCheck className="w-4 h-4 text-blue-400" />
             <span className="text-[10px] tracking-[0.2em] text-blue-300 uppercase font-black">
-              Fusion Intelligence Engine v2.5
+              Fusion Intelligence Engine
             </span>
           </motion.div>
 
@@ -303,7 +303,7 @@ const Detection = () => {
                 <textarea
                   value={textValue}
                   onChange={(e) => setTextValue(e.target.value)}
-                  placeholder="Paste disaster description..."
+                  placeholder="Paste news caption, social post, or disaster report..."
                   className="w-full h-72 p-8 rounded-[2.5rem] bg-[#020617]/50 border border-white/5 focus:border-blue-500/50 text-blue-100 text-lg outline-none transition-all"
                 />
               </div>
@@ -326,7 +326,7 @@ const Detection = () => {
                     <div className="text-center">
                       <UploadCloud size={56} className="text-blue-400/50 mx-auto mb-4" />
                       <p className="text-xs font-black text-white/40 uppercase tracking-widest">
-                        Upload Media
+                        Upload Image
                       </p>
                     </div>
                   ) : (
