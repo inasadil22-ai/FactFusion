@@ -171,8 +171,8 @@ const XAIInsights = () => {
           value: selected?.stage_2_text_analysis?.text_label || 'N/A',
           active: hasText,
           color: indigo,
-          badge: selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor' ? 'FLAGGED' : 'PASSED',
-          badgeColor: selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor' ? red : emerald,
+          badge: ['Non-Informative', 'OOD'].includes(selected?.stage_2_text_analysis?.text_label) ? 'FLAGGED' : 'PASSED',
+          badgeColor: ['Non-Informative', 'OOD'].includes(selected?.stage_2_text_analysis?.text_label) ? red : emerald,
         },
         {
           label: 'Stage 2 — Image Analysis',
@@ -1026,11 +1026,11 @@ const XAIInsights = () => {
                             </p>
                           </div>
                           {hasText && (
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor'
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${['Non-Informative', 'OOD'].includes(selected?.stage_2_text_analysis?.text_label)
                               ? 'bg-red-500/10 border-red-500/20 text-red-300'
                               : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
                               }`}>
-                              {selected?.stage_2_text_analysis?.text_label === 'Unverified Rumor'
+                              {['Non-Informative', 'OOD'].includes(selected?.stage_2_text_analysis?.text_label)
                                 ? 'Flagged' : 'Passed'}
                             </span>
                           )}

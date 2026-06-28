@@ -439,11 +439,11 @@ const Detection = () => {
                   </p>
                   <div className="mt-4">
                     {result.active_modalities?.text ? (
-                      <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${result.stage_2_text_analysis?.text_label === 'Unverified Rumor'
+                      <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${result.stage_2_text_analysis?.text_label === 'Non-Informative' || result.stage_2_text_analysis?.text_label === 'OOD'
                         ? 'bg-red-500/10 border-red-500/20 text-red-300'
                         : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
                         }`}>
-                        {result.stage_2_text_analysis?.text_label === 'Unverified Rumor'
+                        {result.stage_2_text_analysis?.text_label === 'Non-Informative' || result.stage_2_text_analysis?.text_label === 'OOD'
                           ? 'Integrity Audit Flagged'
                           : 'Integrity Audit Passed'}
                       </span>

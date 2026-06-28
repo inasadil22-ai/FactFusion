@@ -3,7 +3,6 @@
 export const SCORE_THRESHOLDS = {
     HIGH: 0.75,
     MID: 0.40,
-    // Add lowercase versions for backward compatibility
     high: 0.75,
     mid: 0.40,
 };
@@ -11,26 +10,41 @@ export const SCORE_THRESHOLDS = {
 export const getVerdictCategory = (verdict) => {
     if (!verdict) return 'OOD';
     const v = verdict.toUpperCase();
-    if (v.includes('CREDIBLE') || v.includes('INFORMATIVE') || v.includes('AUTHENTIC') || v.includes('VERIFIED')) {
-        return 'Informative';
-    }
+
+    // Check Non-Informative BEFORE Informative to avoid substring collision
+    // "NON-INFORMATIVE".includes('INFORMATIVE') is true — must check NON- first
     if (
+        v === 'NON-INFORMATIVE' ||
         v.includes('MISINFORMATION') ||
         v.includes('HIGH RISK') ||
         v.includes('SUSPICIOUS') ||
-        v.includes('NON-INFORMATIVE') ||
-        v.includes('MANIPULATED') ||
+        v.includes('MANIPULATED') || v.includes('TAMPERED') ||
         v.includes('RUMOR') ||
         v.includes('FABRICATED') ||
-        v.includes('MISLEADING')
+        v.includes('MISLEADING') ||
+        v.includes('NOT CREDIBLE') ||
+        v.includes('NOT RELEVANT')
     ) {
         return 'Non-Informative';
     }
-    return 'OOD';
+
+    if (
+        v === 'INFORMATIVE' ||
+        v.includes('CREDIBLE') ||
+        v.includes('AUTHENTIC') ||
+        v.includes('VERIFIED')
+    ) {
+        return 'Informative';
+    }
+
+    if (v === 'OOD' || v.includes('NO DATA')) {
+        return 'OOD';
+    }
+
+    return 'OOD'; // safe fallback
 };
 
 export const classifyVerdict = (verdictOrRecord) => {
-    // Accept either a raw verdict string OR a result/record object
     const record = typeof verdictOrRecord === 'object' ? verdictOrRecord : null;
     const vType = record?.verdict_type;
     const verdict = record?.verdict ?? (typeof verdictOrRecord === 'string' ? verdictOrRecord : '');
@@ -47,20 +61,20 @@ export const classifyVerdict = (verdictOrRecord) => {
 
     const v = verdict.toUpperCase();
     return {
-        isCredible: v.includes('CREDIBLE') || v === 'INFORMATIVE' || v.includes('VERIFIED'),
-        isHighRisk: v.includes('MISINFORMATION') || v.includes('HIGH RISK') || v === 'NON-INFORMATIVE' || v.includes('FABRICATED'),
-        isSuspicious: v.includes('SUSPICIOUS') || v.includes('UNCERTAIN') || v.includes('MISLEADING'),
+        isCredible: v === 'INFORMATIVE' || v.includes('CREDIBLE') || v.includes('VERIFIED'),
+        isHighRisk: v === 'NON-INFORMATIVE' || v.includes('MISINFORMATION') ||
+            v.includes('HIGH RISK') || v.includes('FABRICATED'),
+        isSuspicious: v.includes('SUSPICIOUS') || v.includes('UNCERTAIN') ||
+            v.includes('MISLEADING') || v.includes('NOT RELEVANT'),
         isOOD: v === 'OOD',
     };
 };
 
 export const getVerdictColor = (verdictOrRecordOrCategory) => {
-    // Handle predefined string categories
     if (verdictOrRecordOrCategory === 'Informative') return 'text-emerald-400';
     if (verdictOrRecordOrCategory === 'Non-Informative') return 'text-red-400';
     if (verdictOrRecordOrCategory === 'OOD') return 'text-gray-400';
 
-    // Handle full verdict record / raw string
     const { isCredible, isHighRisk, isSuspicious } = classifyVerdict(verdictOrRecordOrCategory);
     if (isCredible) return 'text-emerald-400';
     if (isHighRisk) return 'text-red-400';
