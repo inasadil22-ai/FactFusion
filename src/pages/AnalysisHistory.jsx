@@ -223,7 +223,7 @@ const AnalysisHistory = () => {
           </div>
         </div>
 
-        {/* --- Bulk Action Bar (appears when items selected) --- */}
+        {/* --- Bulk Action Bar --- */}
         {selectedIds.size > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -332,13 +332,13 @@ const AnalysisHistory = () => {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-white/5 border-b border-white/10">
-                  {/* Select All checkbox */}
-                  <th className="px-6 py-6 w-12">
+                  {/* Styled Header Checkbox */}
+                  <th className="pl-8 pr-2 py-6 w-10 text-center">
                     <input
                       type="checkbox"
                       checked={allSelectedOnPage}
                       onChange={() => toggleSelectAll(filteredHistory)}
-                      className="w-4 h-4 accent-blue-500 cursor-pointer"
+                      className="w-3.5 h-3.5 rounded border-white/20 bg-slate-900 text-blue-500 focus:ring-0 focus:ring-offset-0 accent-blue-500 cursor-pointer transition-all mix-blend-screen opacity-70 hover:opacity-100"
                       title="Select all"
                     />
                   </th>
@@ -363,15 +363,15 @@ const AnalysisHistory = () => {
                   return (
                     <tr
                       key={id || idx}
-                      className={`group transition-all duration-300 ${isSelected ? 'bg-red-500/[0.06]' : 'hover:bg-blue-500/[0.04]'}`}
+                      className={`group transition-all duration-300 ${isSelected ? 'bg-red-500/[0.04]' : 'hover:bg-blue-500/[0.02]'}`}
                     >
-                      {/* Checkbox */}
-                      <td className="px-6 py-6">
+                      {/* Styled Row Checkbox */}
+                      <td className="pl-8 pr-2 py-6 text-center">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(id)}
-                          className="w-4 h-4 accent-blue-500 cursor-pointer"
+                          className="w-3.5 h-3.5 rounded border-white/20 bg-slate-900 text-blue-500 focus:ring-0 focus:ring-offset-0 accent-blue-500 cursor-pointer transition-all mix-blend-screen opacity-60 group-hover:opacity-100"
                         />
                       </td>
                       <td className="px-8 py-6">

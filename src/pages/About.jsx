@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Cpu, Eye, Target, ShieldCheck, Zap, BarChart } from 'lucide-react';
+// Added CheckCircle to the lucide-react imports below
+import { Cpu, Eye, Target, ShieldCheck, Zap, BarChart, CheckCircle } from 'lucide-react';
 
 const About = () => {
   // Features for the mini-grid
