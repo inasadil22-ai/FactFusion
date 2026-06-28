@@ -437,6 +437,11 @@ const Detection = () => {
                   <p className="text-lg font-bold text-white leading-tight">
                     {result.stage_2_text_analysis?.text_label || 'N/A'}
                   </p>
+                  {result.active_modalities?.text && result.stage_2_text_analysis?.text_confidence != null && (
+                    <p className="text-xs text-white/40 mt-1 font-mono">
+                      Model confidence: {(result.stage_2_text_analysis.text_confidence * 100).toFixed(2)}%
+                    </p>
+                  )}
                   <div className="mt-4">
                     {result.active_modalities?.text ? (
                       <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${result.stage_2_text_analysis?.text_label === 'Non-Informative' || result.stage_2_text_analysis?.text_label === 'OOD'
@@ -466,15 +471,27 @@ const Detection = () => {
                   <p className="text-lg font-bold text-white leading-tight">
                     {result.stage_1_image_analysis?.combined_image_label || 'N/A'}
                   </p>
+                  {result.active_modalities?.image && (
+                    <div className="mt-1 flex gap-3 text-xs font-mono text-white/40">
+                      {result.stage_1_image_analysis?.semantic_confidence != null && (
+                        <span>Semantic: {(result.stage_1_image_analysis.semantic_confidence * 100).toFixed(2)}%</span>
+                      )}
+                      {result.stage_1_image_analysis?.forensic_confidence != null && (
+                        <span>Forensic: {(result.stage_1_image_analysis.forensic_confidence * 100).toFixed(2)}%</span>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-4 flex gap-2 flex-wrap">
                     {result.active_modalities?.image ? (
                       <>
                         <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 rounded border border-blue-500/20 text-blue-300 font-black">
                           {result.stage_1_image_analysis?.semantic_label || 'N/A'}
                         </span>
-                        <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 rounded border border-purple-500/20 text-purple-300 font-black">
-                          {result.stage_1_image_analysis?.forensic_label || 'N/A'}
-                        </span>
+                        {result.stage_1_image_analysis?.forensic_label && result.stage_1_image_analysis.forensic_label !== 'N/A' && (
+                          <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 rounded border border-purple-500/20 text-purple-300 font-black">
+                            {result.stage_1_image_analysis.forensic_label}
+                          </span>
+                        )}
                       </>
                     ) : (
                       <span className="text-[10px] px-2 py-0.5 bg-gray-500/10 rounded border border-gray-500/20 text-gray-400 font-black uppercase">

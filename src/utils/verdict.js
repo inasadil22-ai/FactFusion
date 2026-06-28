@@ -11,62 +11,47 @@ export const getVerdictCategory = (verdict) => {
     if (!verdict) return 'OOD';
     const v = verdict.toUpperCase();
 
-    // Check Non-Informative BEFORE Informative to avoid substring collision
-    // "NON-INFORMATIVE".includes('INFORMATIVE') is true — must check NON- first
+    // Credible: only explicit CREDIBLE verdict
+    if (v.includes('CREDIBLE')) return 'Informative';
+
+    // Non-Informative: misinformation or high risk flags
     if (
-        v === 'NON-INFORMATIVE' ||
         v.includes('MISINFORMATION') ||
         v.includes('HIGH RISK') ||
-        v.includes('SUSPICIOUS') ||
-        v.includes('MANIPULATED') || v.includes('TAMPERED') ||
         v.includes('RUMOR') ||
-        v.includes('FABRICATED') ||
-        v.includes('MISLEADING') ||
-        v.includes('NOT CREDIBLE') ||
-        v.includes('NOT RELEVANT')
-    ) {
-        return 'Non-Informative';
-    }
+        v === 'NON-INFORMATIVE'
+    ) return 'Non-Informative';
 
-    if (
-        v === 'INFORMATIVE' ||
-        v.includes('CREDIBLE') ||
-        v.includes('AUTHENTIC') ||
-        v.includes('VERIFIED')
-    ) {
-        return 'Informative';
-    }
+    // Suspicious / Not Relevant → treat as Non-Informative for stats
+    if (v.includes('SUSPICIOUS') || v.includes('NOT RELEVANT')) return 'Non-Informative';
 
-    if (v === 'OOD' || v.includes('NO DATA')) {
-        return 'OOD';
-    }
+    // Text-only informative
+    if (v === 'INFORMATIVE') return 'Informative';
 
-    return 'OOD'; // safe fallback
+    // Image-only real crisis (no text)
+    if (v.includes('REAL CRISIS')) return 'Informative';
+
+    // OOD, uncertain, no data
+    return 'OOD';
 };
 
 export const classifyVerdict = (verdictOrRecord) => {
     const record = typeof verdictOrRecord === 'object' ? verdictOrRecord : null;
-    const vType = record?.verdict_type;
     const verdict = record?.verdict ?? (typeof verdictOrRecord === 'string' ? verdictOrRecord : '');
-
-    if (vType) {
-        const typeLower = vType.toLowerCase();
-        return {
-            isCredible: typeLower === 'credible',
-            isHighRisk: typeLower === 'high_risk',
-            isSuspicious: typeLower === 'suspicious',
-            isOOD: typeLower === 'ood',
-        };
-    }
 
     const v = verdict.toUpperCase();
     return {
-        isCredible: v === 'INFORMATIVE' || v.includes('CREDIBLE') || v.includes('VERIFIED'),
-        isHighRisk: v === 'NON-INFORMATIVE' || v.includes('MISINFORMATION') ||
-            v.includes('HIGH RISK') || v.includes('FABRICATED'),
-        isSuspicious: v.includes('SUSPICIOUS') || v.includes('UNCERTAIN') ||
-            v.includes('MISLEADING') || v.includes('NOT RELEVANT'),
-        isOOD: v === 'OOD',
+        // Credible: only when both image authentic + text informative
+        isCredible: v.includes('CREDIBLE'),
+
+        // High Risk: multiple flags detected
+        isHighRisk: v.includes('HIGH RISK') || v.includes('MISINFORMATION'),
+
+        // Suspicious: mismatch, unrelated caption, unverified rumor
+        isSuspicious: v.includes('SUSPICIOUS') || v.includes('NOT RELEVANT'),
+
+        // OOD / no data
+        isOOD: v === 'OOD' || v === 'NO DATA' || v === 'UNCERTAIN' || v === 'ML DISABLED',
     };
 };
 
@@ -75,10 +60,11 @@ export const getVerdictColor = (verdictOrRecordOrCategory) => {
     if (verdictOrRecordOrCategory === 'Non-Informative') return 'text-red-400';
     if (verdictOrRecordOrCategory === 'OOD') return 'text-gray-400';
 
-    const { isCredible, isHighRisk, isSuspicious } = classifyVerdict(verdictOrRecordOrCategory);
+    const { isCredible, isHighRisk, isSuspicious, isOOD } = classifyVerdict(verdictOrRecordOrCategory);
     if (isCredible) return 'text-emerald-400';
     if (isHighRisk) return 'text-red-400';
     if (isSuspicious) return 'text-amber-400';
+    if (isOOD) return 'text-gray-400';
     return 'text-gray-400';
 };
 

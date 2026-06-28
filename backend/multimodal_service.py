@@ -236,7 +236,7 @@ class MultimodalService:
 
                 # Exact model output — no threshold overrides
                 image_analysis["semantic_label"]      = self.semantic_classes[sem_pred]
-                image_analysis["semantic_confidence"] = round(sem_conf_val, 3)
+                image_analysis["semantic_confidence"] = round(float(sem_conf_val), 4)
                 img_is_disaster = (sem_pred == 0)
 
                 if img_is_disaster:
@@ -246,7 +246,7 @@ class MultimodalService:
                         for_pred     = for_probs.argmax().item()
                         for_conf_val = for_probs[for_pred].item()
                         image_analysis["forensic_label"]      = self.forensic_classes[for_pred]
-                        image_analysis["forensic_confidence"] = round(for_conf_val, 3)
+                        image_analysis["forensic_confidence"] = round(float(for_conf_val), 4)
                     else:
                         image_analysis["forensic_label"]      = "Authentic"
                         image_analysis["forensic_confidence"] = 0.5
@@ -266,11 +266,12 @@ class MultimodalService:
                     image_analysis["forensic_confidence"]   = None
 
             # --- STAGE 1: INDEPENDENT TEXT ANALYSIS ---
-            text_analysis  = {"text_label": "N/A"}
+            text_analysis  = {"text_label": "N/A", "text_confidence": None}
             text_result = {}
             if has_text:
                 text_result = self.text_model_service.predict(caption)
-                text_analysis["text_label"] = text_result["label"]
+                text_analysis["text_label"]      = text_result["label"]
+                text_analysis["text_confidence"] = round(float(text_result.get("confidence", 0.5)), 4)
 
             # --- FINAL VERDICT LOGIC ---
             multimodal_label = "UNCERTAIN"
@@ -322,12 +323,18 @@ class MultimodalService:
                 elif cross_modal_mismatch:
                     multimodal_label = "SUSPICIOUS — Image and Text Mismatch"
                     reasoning = f"Visual content depicts {image_specific_label} but text describes a different context."
-                elif img_is_disaster and text_analysis["text_label"] != "Informative":
+                elif img_is_disaster and text_analysis["text_label"] == "Non-Informative":
+                    multimodal_label = "MISINFORMATION — Unverified Rumor"
+                    reasoning = "Disaster image is paired with non-informative text that cannot be verified as a real crisis report."
+                elif img_is_disaster and text_analysis["text_label"] == "OOD":
                     multimodal_label = "SUSPICIOUS — Disaster Image with Unrelated Caption"
-                    reasoning = "The image shows a real disaster, but the caption is unrelated or non-informative."
-                elif not img_is_disaster and text_analysis["text_label"] != "Informative":
+                    reasoning = "The image shows a real disaster, but the caption is completely unrelated to any crisis context."
+                elif not img_is_disaster and text_analysis["text_label"] == "Non-Informative":
                     multimodal_label = "NOT RELEVANT"
                     reasoning = "Both image and text are classified as non-crisis content."
+                elif not img_is_disaster and text_analysis["text_label"] == "OOD":
+                    multimodal_label = "NOT RELEVANT"
+                    reasoning = "Neither image nor text contains crisis-related content."
                 elif not img_is_disaster and text_analysis["text_label"] == "Informative":
                     multimodal_label = "SUSPICIOUS — Image and Text Mismatch"
                     reasoning = "Visual content is non-crisis, but the text describes a disaster event, indicating a potential mismatch."
@@ -339,18 +346,18 @@ class MultimodalService:
 
             # --- SCORES: raw model confidences, no manipulation ---
             if has_image:
-                image_score = round(for_conf_val if img_is_disaster else sem_conf_val, 3)
+                image_score = round(float(for_conf_val if img_is_disaster else sem_conf_val), 4)
             else:
                 image_score = 0.0
 
-            text_conf = text_result.get("confidence", 0.5) if has_text else None
+            text_conf = float(text_result.get("confidence", 0.5)) if has_text else None
             if has_image and has_text:
                 img_contrib       = for_conf_val if img_is_disaster else sem_conf_val
-                credibility_score = round((img_contrib + (text_conf or 0.5)) / 2.0, 3)
+                credibility_score = round((float(img_contrib) + float(text_conf or 0.5)) / 2.0, 4)
             elif has_image:
-                credibility_score = round(for_conf_val if img_is_disaster else sem_conf_val, 3)
+                credibility_score = round(float(for_conf_val if img_is_disaster else sem_conf_val), 4)
             elif has_text:
-                credibility_score = round(text_conf or 0.5, 3)
+                credibility_score = round(float(text_conf or 0.5), 4)
             else:
                 credibility_score = 0.5
 
@@ -395,11 +402,19 @@ class MultimodalService:
                     xai_payload["text_attributions"] = keyword_attrs[:10]
 
             if has_image:
-                if img_is_disaster and self.semantic_model:
-                    target_layer = self.semantic_model.backbone.conv_head
+                # Always attempt heatmap for ALL images (disaster or not)
+                # Use forensic model for tampered images, semantic for all others
+                heatmap_model  = self.forensic_model if (img_is_disaster and image_analysis.get("forensic_label") == "Tampered" and self.forensic_model) else self.semantic_model
+                target_model   = heatmap_model if heatmap_model else self.semantic_model
+                if target_model:
+                    # Temporarily swap image_model in XAI engine to the right model
+                    _orig = self.xai_engine.image_model
+                    self.xai_engine.image_model = target_model
+                    target_layer = target_model.backbone.conv_head
                     heatmap_matrix, status, method = self.xai_engine.get_visual_explanation(
                         img_tensor, target_layer
                     )
+                    self.xai_engine.image_model = _orig
                     if heatmap_matrix is not None:
                         xai_payload["visual_heatmap"] = heatmap_matrix.tolist()
                         xai_payload["heatmap_status"] = status
