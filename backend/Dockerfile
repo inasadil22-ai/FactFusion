@@ -10,26 +10,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 1. Sabse pehle requirements copy karke install karein
+# 1. Install requirements first (better layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 2. Poora backend folder container ke andar copy karein
-COPY backend/ ./backend/
-COPY README.md .
-COPY config.py .
-COPY database.py .
-COPY model_service.py .
-COPY multimodal_service.py .
-COPY xai_service.py .
-COPY download_models.py .
-COPY settings.json .
-COPY test_atlas.py .
-
-# 3. Code execution path set karein (Taake python ko server module mil jaye)
-ENV PYTHONPATH=/app/backend:/app
+# 2. Copy everything else — flat layout, no backend/ subfolder.
+#    All .py files (server.py, model_service.py, multimodal_service.py,
+#    xai_service.py, download_models.py, config.py, database.py) and any
+#    other root-level assets live directly in /app.
+COPY . .
 
 EXPOSE 7860
 
-# 4. Gunicorn ko exact path batayein ke server:app backend folder ke andar hai
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--timeout", "300", "--workers", "1", "--threads", "4", "backend.server:app"]
+# 3. server.py sits at the root now, so it's just server:app — no
+#    PYTHONPATH or package-path tricks required.
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--timeout", "300", "--workers", "1", "--threads", "4", "server:app"]
