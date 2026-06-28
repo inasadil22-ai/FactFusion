@@ -36,6 +36,22 @@ def initialize_db(app):
         )
         client.admin.command('ping')
         print("✅ MongoDB connected successfully!")
+
+        # Ensure an index exists on created_at so analysis-history's
+        # .sort("created_at", -1) can use the index instead of buffering
+        # every matching document in memory. Without this, MongoDB hits
+        # "Sort exceeded memory limit" once heatmap-laden documents add up,
+        # and analysis-history silently returns nothing to the frontend.
+        # create_index is a no-op if the index already exists, so this is
+        # safe to run on every startup.
+        try:
+            db_for_index = client.get_default_database()
+            db_for_index.analysis.create_index([("created_at", -1)])
+            db_for_index.analysis.create_index([("user_id", 1)])
+            print("✅ MongoDB indexes ensured (analysis.created_at, analysis.user_id)")
+        except Exception as idx_err:
+            print(f"⚠️ Could not ensure MongoDB indexes: {idx_err}")
+
         client.close()
     except ConnectionFailure as e:
         print(f"❌ MongoDB connection failed: {e}")
