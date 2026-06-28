@@ -130,7 +130,7 @@ const Hero = () => {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-8 backdrop-blur-md hover:bg-blue-500/20 transition-colors"
           >
             <ShieldCheck className="w-4 h-4 text-blue-400" />
-            <span className="text-sm text-blue-100">Intelligent Verification System</span>
+            <span className="text-sm text-blue-100"> Disaster Verification System</span>
           </motion.div>
 
           {/* Title */}
@@ -180,7 +180,7 @@ const Hero = () => {
               <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
               <div className="relative flex items-center gap-2">
                 <Search className="w-5 h-5 group-hover:rotate-6 transition-transform duration-500" />
-                <span>Start Detection</span>
+                <span>Start Disaster Detection</span>
               </div>
             </motion.button>
 
@@ -242,8 +242,7 @@ const Hero = () => {
             </h2>
             <div className="h-1 w-24 mx-auto bg-gradient-to-r from-blue-500 to-purple-500 rounded-full mb-8" />
             <p className="text-blue-100/60 max-w-3xl mx-auto text-xl leading-relaxed font-light">
-              Fakenews often uses conflicting text and images. Our system leverages <strong className="text-white font-semibold">fusion and interpretability </strong>
-              to provide a transparent detection method.
+              In disaster-related misinformation, <strong className="text-white font-semibold">misleading narratives are often paired with deceptive visuals</strong>. Our multimodal approach effectively catches these inconsistencies, providing transparent detection you can trust.
             </p>
           </motion.div>
 

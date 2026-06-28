@@ -26,8 +26,8 @@ const About = () => {
             animate={{ opacity: 1 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6 backdrop-blur-md"
           >
-            <ShieldCheck className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] font-black tracking-[0.2em] text-blue-300 uppercase">Disaster Intelligence</span>
+            <CheckCircle className="w-4 h-4 text-blue-400" />
+            <span className="text-[10px] font-black tracking-[0.2em] text-blue-300 uppercase">Disaster Intelligence System</span>
           </motion.div>
 
           <motion.h1
@@ -100,7 +100,7 @@ const About = () => {
             </div>
             <h3 className="text-purple-400 font-bold text-2xl mb-4">Transparent Analysis</h3>
             <p className="text-blue-100/40 leading-relaxed group-hover:text-blue-100/70 transition-colors">
-              Our <span className="text-purple-300">explainable AI</span> identifies manipulated images and unverified text.
+              Our <span className="text-purple-300">explainable AI</span> identifies manipulated disaster imagery and unverified text.
               This provides authorities with clear, actionable evidence to support critical decision-making.
             </p>
           </motion.div>

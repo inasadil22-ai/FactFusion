@@ -74,7 +74,7 @@ const Dashboard = () => {
   }, [data]);
 
   const originData = [
-    { name: 'Subjective/Noise', value: stats.textThreats, icon: FileText, color: '#f97316' },
+    { name: 'Unverified Claims', value: stats.textThreats, icon: FileText, color: '#f97316' },
     { name: 'Out of Context', value: stats.filteredThreats, icon: AlertTriangle, color: '#9ca3af' },
     { name: 'Fusion Mismatch', value: stats.mismatchThreats, icon: Share2, color: '#a855f7' },
   ];
@@ -110,7 +110,7 @@ const Dashboard = () => {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-blue-100/40 text-lg italic tracking-wide"
             >
-              Multimodal Detection Intelligence
+              Disaster Detection Intelligence
             </motion.p>
           </header>
 

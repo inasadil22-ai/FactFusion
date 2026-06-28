@@ -28,7 +28,7 @@ const Navbar = () => {
   // Define navigation options based on your file structure
   const ALL_NAV_OPTIONS = useMemo(() => ([
     { name: 'Home', path: '/', protected: false },
-    { name: 'Detection', path: '/detection', protected: true },
+    { name: 'Disaster Detection', path: '/detection', protected: true },
     { name: 'XAI Insights', path: '/xai', protected: true },
     { name: 'Analysis History', path: '/analysis-history', protected: true },
     { name: 'About', path: '/about', protected: false },
@@ -81,10 +81,6 @@ const Navbar = () => {
 
         {/* --- Right Side: Dashboard & Auth --- */}
         <div className="flex items-center gap-4">
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-500/5 border border-blue-500/10">
-            <Shield className="w-4 h-4 text-blue-500" />
-            <span className="text-blue-400/80 font-mono text-[10px] tracking-widest uppercase">FYP 2026</span>
-          </div>
 
           {user ? (
             <div className="flex items-center gap-3">
