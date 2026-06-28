@@ -518,12 +518,12 @@ const Detection = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-white/[0.03] border border-white/10 rounded-[2rem] p-8 text-center relative">
-                  <h4 className="text-sm font-bold uppercase text-blue-400 tracking-widest mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white/[0.03] border border-white/10 rounded-[1.5rem] p-5 text-center relative">
+                  <h4 className="text-xs font-bold uppercase text-blue-400 tracking-widest mb-3">
                     Semantic Integrity
                   </h4>
-                  <div className="h-56 relative">
+                  <div className="h-36 relative">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -531,8 +531,8 @@ const Detection = () => {
                             { value: result.credibility_score ?? 0 },
                             { value: 1 - (result.credibility_score ?? 0) },
                           ]}
-                          innerRadius={80}
-                          outerRadius={110}
+                          innerRadius={50}
+                          outerRadius={68}
                           startAngle={180}
                           endAngle={0}
                           dataKey="value"
@@ -543,18 +543,18 @@ const Detection = () => {
                         </Pie>
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center pt-12 text-5xl font-black">
+                    <div className="absolute inset-0 flex items-center justify-center pt-8 text-3xl font-black">
                       {((result.credibility_score ?? 0) * 100).toFixed(0)}%
                     </div>
                   </div>
                 </div>
 
                 {result.image_score != null && (
-                  <div className="bg-white/[0.03] border border-white/10 rounded-[3rem] p-12 text-center relative">
-                    <h4 className="text-sm font-bold uppercase text-purple-400 tracking-widest mb-10">
+                  <div className="bg-white/[0.03] border border-white/10 rounded-[1.5rem] p-5 text-center relative">
+                    <h4 className="text-xs font-bold uppercase text-purple-400 tracking-widest mb-3">
                       Visual Authenticity
                     </h4>
-                    <div className="h-56 relative">
+                    <div className="h-36 relative">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -562,8 +562,8 @@ const Detection = () => {
                               { value: result.image_score ?? 0 },
                               { value: 1 - (result.image_score ?? 0) },
                             ]}
-                            innerRadius={80}
-                            outerRadius={110}
+                            innerRadius={50}
+                            outerRadius={68}
                             startAngle={180}
                             endAngle={0}
                             dataKey="value"
@@ -574,7 +574,7 @@ const Detection = () => {
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
-                      <div className="absolute inset-0 flex items-center justify-center pt-12 text-5xl font-black">
+                      <div className="absolute inset-0 flex items-center justify-center pt-8 text-3xl font-black">
                         {((result.image_score ?? 0) * 100).toFixed(0)}%
                       </div>
                     </div>
