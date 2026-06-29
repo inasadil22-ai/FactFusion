@@ -314,14 +314,19 @@ class MultimodalService:
                     if image_specific_label.lower() not in caption.lower():
                         cross_modal_mismatch = True
 
-                # img_text_mismatch covers ALL ways a content mismatch surfaces:
+                # img_text_mismatch covers content-mismatch signals that are NOT
+                # already represented by a dedicated, more specific flag below:
                 # (a) cross_modal_mismatch — CLIP's specific label disagrees with the caption
                 # (b) non-crisis image paired with informative disaster text
-                # (c) [FIX] disaster image paired with non-informative/unrelated caption
+                # NOTE: "disaster image + Non-Informative text" is intentionally excluded
+                # here — that exact scenario already produces is_unverified_rumor, and
+                # "disaster image + OOD text" gets its own dedicated verdict branch below.
+                # Counting them again here was double-flagging every rumor/OOD case and
+                # forcing them into the generic HIGH RISK bucket before they could ever
+                # reach their specific verdict.
                 img_text_mismatch = (
                     cross_modal_mismatch
                     or (not img_is_disaster and text_analysis["text_label"] == "Informative")
-                    or (img_is_disaster and text_analysis["text_label"] not in ("Informative", "N/A"))
                 )
 
                 flags = []
