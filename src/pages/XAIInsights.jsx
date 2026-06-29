@@ -537,6 +537,39 @@ const XAIInsights = () => {
     }
   }, [scanId, records]);
 
+  // Block C: When selected record changes and it has no heatmap (history record),
+  // fetch the full record with heatmap from the single-record endpoint
+  useEffect(() => {
+    if (selectedIdx === null) return;
+    const rec = records[selectedIdx];
+    if (!rec) return;
+    // Skip if: it's the router result (index 0 with routerResult) or heatmap already present
+    const alreadyHasHeatmap = Array.isArray(rec?.xai_insights?.visual_heatmap) && rec.xai_insights.visual_heatmap.length > 0;
+    if (alreadyHasHeatmap) return;
+    const recordId = rec.id || rec._id;
+    if (!recordId) return;
+
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/api/v1/analysis-history/record/${recordId}`, {
+          signal: controller.signal
+        });
+        if (res.data && !controller.signal.aborted) {
+          // Merge heatmap into the existing record in state
+          setRecords(prev => prev.map((r, i) =>
+            i === selectedIdx ? { ...r, xai_insights: res.data.xai_insights } : r
+          ));
+        }
+      } catch (err) {
+        if (!axios.isCancel(err) && err?.name !== 'CanceledError') {
+          console.warn('[XAI] Could not fetch full record with heatmap:', err.message);
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [selectedIdx]);
+
   const selected = selectedIdx !== null ? (records[selectedIdx] || null) : null;
   const xai = selected?.xai_insights || {};
 

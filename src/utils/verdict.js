@@ -51,7 +51,7 @@ export const classifyVerdict = (verdictOrRecord) => {
         isSuspicious: v.includes('SUSPICIOUS') || v.includes('NOT RELEVANT'),
 
         // OOD / no data
-        isOOD: v === 'OOD' || v === 'NO DATA' || v === 'UNCERTAIN' || v === 'ML DISABLED',
+        isOOD: v === 'OOD' || v === 'NO DATA' || v.includes('UNCERTAIN') || v === 'ML DISABLED',
     };
 };
 

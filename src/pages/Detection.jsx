@@ -85,9 +85,11 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
     };
   }, [originalImageSrc, heatmapMatrix, opacity]);
 
-  const semanticScore = result?.credibility_score ?? 0.5;
-  const visualScore = result?.image_score ?? 0.9;
-  const fusionScore = result?.stage_3_multimodal_fusion?.fusion_score ?? result?.fusion_score ?? 0.7;
+  // FIX: No hardcoded fallbacks — use null if score unavailable
+  const semanticScore = result?.credibility_score ?? null;
+  const visualScore = result?.image_score ?? null;
+  const fusionScore = result?.stage_3_multimodal_fusion?.fusion_score
+    ?? result?.fusion_score ?? null;
 
   return (
     <div className="flex flex-col items-center gap-4 bg-zinc-900/40 p-4 rounded-xl border border-zinc-800">
@@ -103,15 +105,21 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
         <div className="flex justify-between text-[10px] font-semibold uppercase tracking-widest">
           <div className="flex flex-col items-start text-zinc-500">
             <span>Low (Text)</span>
-            <span className="text-emerald-400 font-bold lowercase mt-0.5">{(semanticScore * 100).toFixed(0)}%</span>
+            <span className="text-emerald-400 font-bold lowercase mt-0.5">
+              {semanticScore !== null ? `${(semanticScore * 100).toFixed(0)}%` : 'N/A'}
+            </span>
           </div>
           <div className="flex flex-col items-center text-zinc-500">
             <span>Medium (Fusion)</span>
-            <span className="text-yellow-400 font-bold lowercase mt-0.5">{(fusionScore * 100).toFixed(0)}%</span>
+            <span className="text-yellow-400 font-bold lowercase mt-0.5">
+              {fusionScore !== null ? `${(fusionScore * 100).toFixed(0)}%` : 'N/A'}
+            </span>
           </div>
           <div className="flex flex-col items-end text-zinc-500">
             <span>High (Image)</span>
-            <span className="text-rose-400 font-bold lowercase mt-0.5">{(visualScore * 100).toFixed(0)}%</span>
+            <span className="text-rose-400 font-bold lowercase mt-0.5">
+              {visualScore !== null ? `${(visualScore * 100).toFixed(0)}%` : 'N/A'}
+            </span>
           </div>
         </div>
 
@@ -395,6 +403,9 @@ const Detection = () => {
                     ? AlertTriangle
                     : ShieldAlert;
 
+                // FIX: Read heatmap from correct backend field: xai_insights.visual_heatmap
+                const heatmapData = result?.xai_insights?.visual_heatmap;
+
                 return (
                   <div className={`p-6 rounded-[2.5rem] border-2 flex flex-col md:flex-row items-center justify-between gap-8 ${cardStyles}`}>
                     <div className="flex items-center gap-6 w-full md:w-auto">
@@ -406,16 +417,17 @@ const Detection = () => {
                           {result.verdict || 'Analysis Result'}
                         </h3>
                         <p className="text-white/40 font-bold uppercase text-xs mt-1">
-                          Score: {((result.credibility_score ?? 0) * 100).toFixed(1)}%
+                          Score: {result.credibility_score != null ? `${(result.credibility_score * 100).toFixed(1)}%` : 'N/A'}
                         </p>
                       </div>
                     </div>
 
-                    {result.stage_1_image_analysis?.heatmap && (
+                    {/* FIX: Use correct field xai_insights.visual_heatmap */}
+                    {heatmapData && heatmapData.length > 0 && previewUrl && (
                       <div className="w-full md:w-auto flex justify-center">
                         <XAIVisualizer
                           originalImageSrc={previewUrl}
-                          heatmapMatrix={result.stage_1_image_analysis.heatmap}
+                          heatmapMatrix={heatmapData}
                           result={result}
                         />
                       </div>
@@ -553,7 +565,7 @@ const Detection = () => {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex items-center justify-center pt-8 text-3xl font-black">
-                      {((result.credibility_score ?? 0) * 100).toFixed(0)}%
+                      {result.credibility_score != null ? `${(result.credibility_score * 100).toFixed(0)}%` : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -584,7 +596,7 @@ const Detection = () => {
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex items-center justify-center pt-8 text-3xl font-black">
-                        {((result.image_score ?? 0) * 100).toFixed(0)}%
+                        {(result.image_score * 100).toFixed(0)}%
                       </div>
                     </div>
                   </div>
@@ -610,8 +622,9 @@ const Detection = () => {
                     </p>
                   </div>
                 </div>
+                {/* FIX: Pass full result via state instead of undefined result.id */}
                 <button
-                  onClick={() => navigate(`/xai?id=${result.id}`)}
+                  onClick={() => navigate('/xai', { state: { result, previewUrl } })}
                   className="px-10 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-900/40 hover:-translate-y-1"
                 >
                   Explore XAI Evidence

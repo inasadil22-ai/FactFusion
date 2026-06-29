@@ -289,6 +289,23 @@ def delete_analysis_record(id):
     except Exception as e:
         return jsonify({'error': 'Invalid ID format'}), 400
 
+@app.route('/api/v1/analysis-history/record/<id>', methods=['GET'])
+def get_single_analysis(id):
+    """
+    Fetch a single analysis record WITH heatmap included.
+    Used by XAIInsights page to load full data for history records.
+    History list route excludes heatmap for performance — this route includes it.
+    """
+    if db is None:
+        return jsonify({'error': 'Database not connected'}), 500
+    try:
+        record = db.analysis.find_one({'_id': ObjectId(id)})
+        if not record:
+            return jsonify({'error': 'Record not found'}), 404
+        return jsonify(clean_mongo_record(record)), 200
+    except Exception as e:
+        return jsonify({'error': 'Invalid ID format'}), 400
+
 # --- SERVE UPLOADED IMAGES ---
 @app.route('/uploads/<filename>')
 def serve_upload(filename):

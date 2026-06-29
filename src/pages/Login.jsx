@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import CryptoJS from 'crypto-js';
 import {
   Lock as LockIcon,
   User,
@@ -65,27 +64,34 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const passwordHash = CryptoJS.SHA256(password).toString();
       const endpoint = isLogin ? '/api/login' : '/api/signup';
 
-      // FIXED PAYLOAD: Standardized both login and signup to pass 'password' key
+      // Send plain password over HTTPS — backend (bcrypt) handles secure hashing.
+      // Client-side SHA256 was removed: it added no real security (no salt) and
+      // caused a double-hash mismatch with the server's bcrypt comparison.
       const payload = isLogin
-        ? { email, password: passwordHash }
-        : { email, password: passwordHash, role: 'standard' };
+        ? { email, password }
+        : { email, password, role: 'standard' };
 
-      //  CORRECT FUNCTIONAL STRUCTURE:
       const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
 
       // Ensure it hits /api/login or /api/signup depending on mode
-      const response = await axios.post(`${apiBase}${endpoint}`, payload)
+      const response = await axios.post(`${apiBase}${endpoint}`, payload);
 
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      // Validate the response shape before trusting it — prevents "undefined"
+      // user_id and broken history if the backend ever returns a malformed payload.
+      const user = response.data?.user;
+      if (!user?.id) {
+        throw new Error("Invalid response from server: missing user data.");
+      }
+
+      localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('accessToken', response.data.token || 'SESSION_ACTIVE');
 
       // Redirecting to home/hero
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Connection failure: Database offline.");
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || "Connection failure: Database offline.");
     } finally {
       setIsLoading(false);
     }

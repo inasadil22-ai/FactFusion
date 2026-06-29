@@ -410,7 +410,12 @@ const AnalysisHistory = () => {
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">
-                        <span className={`font-mono text-xl font-black ${item.credibility_score > SCORE_THRESHOLDS.HIGH ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <span className={`font-mono text-xl font-black ${item.credibility_score > SCORE_THRESHOLDS.HIGH
+                            ? 'text-emerald-400'
+                            : item.credibility_score > SCORE_THRESHOLDS.MID
+                              ? 'text-amber-400'
+                              : 'text-red-400'
+                          }`}>
                           {((item.credibility_score || 0) * 100).toFixed(0)}%
                         </span>
                       </td>

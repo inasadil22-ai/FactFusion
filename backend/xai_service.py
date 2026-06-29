@@ -172,13 +172,20 @@ class XAIEngine:
         Calculates feature importance scores for incoming text tokens.
         SHAP primary (real per-token signed weights).
         Falls back to original position-weighted heuristic if SHAP unavailable.
+
+        Label mapping: {0: "Non-Informative", 1: "Informative", 2: "OOD"}
+        SHAP index 1 = "Informative" — correct class to explain disaster-relevant content.
         """
         # PATH 1 — SHAP (only if text_explainer was initialised at init)
         if self.text_explainer is not None:
             try:
                 shap_values = self.text_explainer([text])
                 tokens      = shap_values.data[0]
-                weights     = shap_values.values[0][:, 0]  # class index 0 = disaster
+                # FIX: was [:, 0] which explained "Non-Informative" (class 0)
+                # Now [:, 1] explains "Informative" (class 1) — semantically correct
+                # Positive weight = token pushes toward Informative/disaster
+                # Negative weight = token pushes away from Informative
+                weights     = shap_values.values[0][:, 1]
                 result = [
                     {"token": t.replace("Ġ", ""), "weight": round(float(w), 3)}
                     for t, w in zip(tokens, weights)
