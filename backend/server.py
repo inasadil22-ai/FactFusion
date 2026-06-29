@@ -1,5 +1,6 @@
 import os
 import datetime
+import hashlib
 from bson.objectid import ObjectId
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -243,7 +244,31 @@ def login_user():
 
         user = db.users.find_one({'email': email})
 
-        if user and bcrypt.check_password_hash(user['password_hash'], password_to_check):
+        if not user:
+            return jsonify({'error': 'Invalid email or password'}), 401
+
+        stored_hash = user['password_hash']
+        authenticated = False
+
+        # --- New flow: client now sends the plain password ---
+        if bcrypt.check_password_hash(stored_hash, password_to_check):
+            authenticated = True
+        else:
+            # --- Legacy fallback: older accounts were created when the client
+            # pre-hashed the password with SHA256 before bcrypt ever saw it.
+            # If the plain password matches under that old scheme, accept it
+            # and silently upgrade the stored hash to the new (correct) format
+            # so future logins go through the fast path above.
+            legacy_sha256 = hashlib.sha256(password_to_check.encode('utf-8')).hexdigest()
+            if bcrypt.check_password_hash(stored_hash, legacy_sha256):
+                authenticated = True
+                new_hash = bcrypt.generate_password_hash(password_to_check).decode('utf-8')
+                db.users.update_one(
+                    {'_id': user['_id']},
+                    {'$set': {'password_hash': new_hash}}
+                )
+
+        if authenticated:
             return jsonify({
                 'user': {
                     'id': str(user['_id']),
