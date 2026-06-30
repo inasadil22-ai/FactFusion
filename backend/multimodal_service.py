@@ -62,19 +62,23 @@ class MultimodalService:
         forensic_model_path = os.path.join(base_dir, 'models', 'forensic_v2_model_BEST.pt')
 
         try:
-            # Semantic Model
             self.semantic_model = DisasterDetector(num_classes=2).to(device)
             self.semantic_model.load_state_dict(torch.load(semantic_model_path, map_location=device, weights_only=False)['model_state_dict'])
             self.semantic_model.eval()
-            
-            # Forensic Model
+            print("Successfully loaded Semantic PyTorch model.")
+        except Exception as e:
+            print(f"[MODEL LOAD FAILURE] Semantic model failed to load from {semantic_model_path}: {e}")
+            traceback.print_exc()
+            self.semantic_model = None
+
+        try:
             self.forensic_model = DisasterDetector(num_classes=2, dropout=0.5).to(device)
             self.forensic_model.load_state_dict(torch.load(forensic_model_path, map_location=device, weights_only=False)['model_state_dict'])
             self.forensic_model.eval()
-            print("Successfully loaded Semantic and Forensic PyTorch models.")
+            print("Successfully loaded Forensic PyTorch model.")
         except Exception as e:
-            print(f"Failed to load PyTorch models: {e}")
-            self.semantic_model = None
+            print(f"[MODEL LOAD FAILURE] Forensic model failed to load from {forensic_model_path}: {e}")
+            traceback.print_exc()
             self.forensic_model = None
 
         # ── SHAP background tensor (optional — enables SHAP over Grad-CAM) ──
@@ -205,9 +209,10 @@ class MultimodalService:
                 "forensic_label":    "N/A",
                 "combined_image_label": "N/A"
             }
-            img_is_disaster      = False
-            forensic_uncertain   = False
-            image_specific_label = None
+            img_is_disaster       = False
+            forensic_uncertain    = False
+            forensic_unavailable  = False
+            image_specific_label  = None
             flags = []
             sem_conf_val = 0.5
             for_conf_val = 0.5
@@ -250,10 +255,10 @@ class MultimodalService:
                         image_analysis["forensic_confidence"] = round(float(for_conf_val), 4)
                         forensic_uncertain = for_conf_val < 0.55
                     else:
-                        image_analysis["forensic_label"]      = "Authentic"
+                        image_analysis["forensic_label"]      = "N/A"
                         image_analysis["forensic_confidence"] = None
-                        for_conf_val       = 0.5
-                        forensic_uncertain = True  # model missing = uncertain
+                        for_conf_val          = 0.5
+                        forensic_unavailable  = True  # model missing — distinct from low-confidence uncertainty
 
                     image_analysis["combined_image_label"] = f"Real Crisis / Disaster — {image_analysis['forensic_label']}"
 
@@ -334,6 +339,7 @@ class MultimodalService:
                 if has_temporal_issue:                                 flags.append("Old Content")
                 if img_text_mismatch:                                  flags.append("Mismatch")
                 if forensic_uncertain:                                 flags.append("Forensic Uncertain")
+                if forensic_unavailable:                                flags.append("Forensic Unavailable")
                 if is_unverified_rumor:                                flags.append("Unverified Rumor")
 
                 if len(flags) >= 2:
@@ -348,6 +354,9 @@ class MultimodalService:
                 elif img_is_disaster and forensic_uncertain:
                     multimodal_label = "UNCERTAIN — Manipulation Status Unclear"
                     reasoning = "Crisis image detected, but forensic analysis is inconclusive regarding authenticity."
+                elif img_is_disaster and forensic_unavailable:
+                    multimodal_label = "UNCERTAIN — Forensic Analysis Unavailable"
+                    reasoning = "Crisis image detected, but the forensic model could not be run for this request."
                 elif is_unverified_rumor:
                     multimodal_label = "MISINFORMATION — Unverified Rumor"
                     reasoning = "Disaster image is paired with non-informative text that cannot be verified as a real crisis report."
