@@ -83,7 +83,7 @@ class ModelLoader:
         if not self._has_disaster_signal(text):
             return {
                 "label":      "OOD",
-                "confidence": 0.9,
+                "confidence": None,  # rule-based gate, not a model probability — don't fake precision
                 "xai": {
                     "explanation":  "The text is unrelated to any crisis or disaster domain.",
                     "text_weights": ["ANALYSIS-COMPLETE"]

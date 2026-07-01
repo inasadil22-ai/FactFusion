@@ -210,8 +210,6 @@ class MultimodalService:
                 "combined_image_label": "N/A"
             }
             img_is_disaster       = False
-            forensic_uncertain    = False
-            forensic_unavailable  = False
             image_specific_label  = None
             flags = []
             sem_conf_val = 0.5
@@ -253,12 +251,12 @@ class MultimodalService:
                         for_conf_val = for_probs[for_pred].item()
                         image_analysis["forensic_label"]      = self.forensic_classes[for_pred]
                         image_analysis["forensic_confidence"] = round(float(for_conf_val), 4)
-                        forensic_uncertain = for_conf_val < 0.55
                     else:
                         image_analysis["forensic_label"]      = "N/A"
                         image_analysis["forensic_confidence"] = None
                         for_conf_val          = 0.5
-                        forensic_unavailable  = True  # model missing — distinct from low-confidence uncertainty
+                        # Safety net only — forensic model is expected to load
+                        # reliably now; this should not normally be hit.
 
                     image_analysis["combined_image_label"] = f"Real Crisis / Disaster — {image_analysis['forensic_label']}"
 
@@ -278,16 +276,21 @@ class MultimodalService:
             text_result = {}
             if has_text:
                 text_result = self.text_model_service.predict(caption)
-                text_analysis["text_label"]      = text_result["label"]
-                text_analysis["text_confidence"] = round(float(text_result.get("confidence", 0.0)), 4)
-                # Unverified rumor: disaster image paired with Non-Informative text
-                # Uses actual model labels (Informative / Non-Informative / OOD)
-                is_unverified_rumor = (
+                text_analysis["text_label"] = text_result["label"]
+                # OOD confidence is intentionally None (rule-based gate, not a
+                # model probability) — guard against None before rounding.
+                raw_conf = text_result.get("confidence")
+                text_analysis["text_confidence"] = round(float(raw_conf), 4) if raw_conf is not None else None
+                # Uninformative pairing: real disaster image paired with vague/
+                # Non-Informative text. This is NOT evidence of a false claim
+                # (no factual assertion is being made), just a lack of verifiable
+                # information — so it's flagged as SUSPICIOUS, not MISINFORMATION.
+                is_uninformative_pairing = (
                     img_is_disaster
                     and text_analysis["text_label"] == "Non-Informative"
                 )
             else:
-                is_unverified_rumor = False
+                is_uninformative_pairing = False
 
             # --- FINAL VERDICT LOGIC ---
             multimodal_label = "UNCERTAIN"
@@ -324,7 +327,7 @@ class MultimodalService:
                 # (a) cross_modal_mismatch — CLIP's specific label disagrees with the caption
                 # (b) non-crisis image paired with informative disaster text
                 # NOTE: "disaster image + Non-Informative text" is intentionally excluded
-                # here — that exact scenario already produces is_unverified_rumor, and
+                # here — that exact scenario already produces is_uninformative_pairing, and
                 # "disaster image + OOD text" gets its own dedicated verdict branch below.
                 # Counting them again here was double-flagging every rumor/OOD case and
                 # forcing them into the generic HIGH RISK bucket before they could ever
@@ -338,9 +341,7 @@ class MultimodalService:
                 if image_analysis["forensic_label"] == "Tampered":    flags.append("Manipulated Image")
                 if has_temporal_issue:                                 flags.append("Old Content")
                 if img_text_mismatch:                                  flags.append("Mismatch")
-                if forensic_uncertain:                                 flags.append("Forensic Uncertain")
-                if forensic_unavailable:                                flags.append("Forensic Unavailable")
-                if is_unverified_rumor:                                flags.append("Unverified Rumor")
+                if is_uninformative_pairing:                           flags.append("Uninformative Caption")
 
                 if len(flags) >= 2:
                     multimodal_label = "HIGH RISK — Multiple Flags Detected"
@@ -351,15 +352,9 @@ class MultimodalService:
                 elif image_analysis["forensic_label"] == "Tampered" and img_is_disaster:
                     multimodal_label = "MISINFORMATION — Manipulated Image"
                     reasoning = "Forensic analysis detected digital alterations in the crisis image."
-                elif img_is_disaster and forensic_uncertain:
-                    multimodal_label = "UNCERTAIN — Manipulation Status Unclear"
-                    reasoning = "Crisis image detected, but forensic analysis is inconclusive regarding authenticity."
-                elif img_is_disaster and forensic_unavailable:
-                    multimodal_label = "UNCERTAIN — Forensic Analysis Unavailable"
-                    reasoning = "Crisis image detected, but the forensic model could not be run for this request."
-                elif is_unverified_rumor:
-                    multimodal_label = "MISINFORMATION — Unverified Rumor"
-                    reasoning = "Disaster image is paired with non-informative text that cannot be verified as a real crisis report."
+                elif is_uninformative_pairing:
+                    multimodal_label = "SUSPICIOUS — Uninformative Caption on Crisis Image"
+                    reasoning = "The image shows a real disaster, but the accompanying text provides no verifiable or actionable information."
                 elif cross_modal_mismatch:
                     multimodal_label = "SUSPICIOUS — Image and Text Mismatch"
                     reasoning = f"Visual content depicts {image_specific_label} but text describes a different context."
@@ -387,14 +382,16 @@ class MultimodalService:
             else:
                 image_score = 0.0
 
-            text_conf = float(text_result.get("confidence", 0.5)) if has_text else None
+            # text_conf may legitimately be None for OOD (rule-based, no model
+            # probability) — downstream arithmetic below falls back to 0.5.
+            text_conf = text_result.get("confidence") if has_text else None
             if has_image and has_text:
                 img_contrib       = for_conf_val if img_is_disaster else sem_conf_val
-                credibility_score = round((float(img_contrib) + float(text_conf or 0.5)) / 2.0, 4)
+                credibility_score = round((float(img_contrib) + float(text_conf if text_conf is not None else 0.5)) / 2.0, 4)
             elif has_image:
                 credibility_score = round(float(for_conf_val if img_is_disaster else sem_conf_val), 4)
             elif has_text:
-                credibility_score = round(float(text_conf or 0.5), 4)
+                credibility_score = round(float(text_conf if text_conf is not None else 0.5), 4)
             else:
                 credibility_score = 0.5
 
