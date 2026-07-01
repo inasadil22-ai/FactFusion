@@ -35,6 +35,17 @@ class ModelLoader:
             "humanitarian", "aid", "responders", "firefighters", "paramedics",
             "ambulance", "hospital", "wounded", "survivors", "looting", "curfew",
         ]
+        # Soft/indirect disaster-reaction phrases — vague emotional language people
+        # actually post about real disasters, without using clinical keywords above.
+        # Multi-word phrases only, to avoid false-positives from unrelated contexts
+        # (bare words like "scary" or "terrible" are deliberately excluded — they're
+        # too common in non-disaster contexts like movies, sports, breakups, etc.)
+        self.soft_disaster_phrases = [
+            "pray for everyone", "thoughts and prayers", "sending love and strength",
+            "sending love", "sending strength", "stay safe everyone", "please stay safe",
+            "everyone affected", "our thoughts are with", "our hearts go out",
+            "heartbroken", "condolences",
+        ]
         self.uncertain_words = [
             "maybe", "rumor", "rumour", "unconfirmed", "allegedly", "claims",
             "reportedly", "unverified",
@@ -54,10 +65,13 @@ class ModelLoader:
             self.model = None
 
     def _has_disaster_signal(self, text):
-        """Cheap domain gate: does this text contain any disaster-domain keyword?"""
+        """Cheap domain gate: does this text contain any disaster-domain keyword
+        or soft/indirect disaster-reaction phrase?"""
         clean = re.sub(r'[^a-z\s]', ' ', text.lower())
         words = set(clean.split())
-        return any(kw in clean for kw in self.disaster_keywords) or bool(words & set(self.disaster_keywords))
+        has_keyword = any(kw in clean for kw in self.disaster_keywords) or bool(words & set(self.disaster_keywords))
+        has_soft_phrase = any(phrase in clean for phrase in self.soft_disaster_phrases)
+        return has_keyword or has_soft_phrase
 
     def predict(self, text):
         if not text:
