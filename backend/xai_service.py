@@ -72,7 +72,7 @@ class XAIEngine:
         forward_hook  = target_layer.register_forward_hook(
             lambda module, input, output: self._save_activation(output)
         )
-        backward_hook = target_layer.register_backward_hook(
+        backward_hook = target_layer.register_full_backward_hook(
             lambda module, grad_input, grad_output: self._save_gradient(grad_output[0])
         )
 
@@ -160,6 +160,7 @@ class XAIEngine:
                 return heatmap, "AVAILABLE", "grad-cam"
             except Exception as e:
                 print(f"[XAI] Grad-CAM failed: {e}")
+                return None, f"GRAD-CAM FAILED: {str(e)}", None
 
         return None, "UNAVAILABLE", None
 

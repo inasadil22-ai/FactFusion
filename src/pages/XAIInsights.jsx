@@ -55,7 +55,31 @@ const XAIInsights = () => {
     fetchRecords();
   }, [scanId]);
 
-  const selected = selectedIdx !== null ? (records[selectedIdx] || null) : null;
+  // The list endpoint deliberately omits xai_insights.visual_heatmap for performance.
+  // Once a record is selected, fetch the full record (heatmap included) from the
+  // dedicated single-record endpoint and prefer it over the trimmed list item.
+  const listSelected = selectedIdx !== null ? (records[selectedIdx] || null) : null;
+  const [detailRecord, setDetailRecord] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  useEffect(() => {
+    if (!listSelected?.id) {
+      setDetailRecord(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    axios.get(`${API_BASE}/api/v1/analysis-history/record/${listSelected.id}`)
+      .then(res => { if (!cancelled) setDetailRecord(res.data); })
+      .catch(err => {
+        console.error('Failed to fetch full XAI record (heatmap):', err);
+        if (!cancelled) setDetailRecord(null);
+      })
+      .finally(() => { if (!cancelled) setDetailLoading(false); });
+    return () => { cancelled = true; };
+  }, [listSelected?.id]);
+
+  const selected = detailRecord || listSelected;
   const xai = selected?.xai_insights || {};
   const hasImage = selected?.image_ref && selected?.image_score !== null && selected?.image_score !== undefined;
   const hasText = !!selected?.text_snippet;
@@ -235,7 +259,7 @@ const XAIInsights = () => {
                 >
 
                   {/* Row 1: Text Attributions + Visual Heatmap */}
-                  <div className={`grid gap-8 ${hasHeatmap ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+                  <div className={`grid gap-8 ${hasImage ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
 
                     {/* Text Attributions Card */}
                     <div className="flex flex-col p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-blue-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(59,130,246,0.05)] transition-all duration-300">
@@ -259,8 +283,8 @@ const XAIInsights = () => {
                                   SHAP Token Attribution
                                 </p>
                                 <div className="flex gap-3 text-[9px] font-bold uppercase">
-                                  <span className="flex items-center gap-1 text-red-400"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block"/>Disaster signal</span>
-                                  {hasNeg && <span className="flex items-center gap-1 text-blue-400"><span className="w-2 h-2 rounded-sm bg-blue-500 inline-block"/>Against</span>}
+                                  <span className="flex items-center gap-1 text-red-400"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block" />Disaster signal</span>
+                                  {hasNeg && <span className="flex items-center gap-1 text-blue-400"><span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" />Against</span>}
                                 </div>
                               </div>
                               <div className="space-y-2">
@@ -358,6 +382,49 @@ const XAIInsights = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Visual Heatmap Unavailable / Loading Card */}
+                    {hasImage && !hasHeatmap && (
+                      <div className="flex flex-col p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl">
+                        <div className="flex items-center justify-between mb-8">
+                          <h2 className="text-xl font-black text-white flex items-center gap-3 uppercase tracking-tight">
+                            <ImageIcon size={24} className="text-indigo-400" /> Visual Saliency
+                          </h2>
+                          <Target size={20} className="text-indigo-500/40" />
+                        </div>
+
+                        {detailLoading ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+                            <div className="w-full p-6 bg-black/40 rounded-[2rem] border border-white/5 flex items-center justify-center h-28">
+                              <span className="text-xs font-black text-white/20 uppercase tracking-widest animate-pulse">Loading Heatmap…</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+                            <div className="w-full p-6 bg-black/40 rounded-[2rem] border border-white/5 flex items-center justify-center h-28">
+                              <span className="text-xs font-black text-white/20 uppercase tracking-widest">Heatmap Not Available</span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 justify-center">
+                              <span className="text-[10px] px-3 py-1 rounded-lg border font-black uppercase bg-amber-500/10 border-amber-500/20 text-amber-300">
+                                {xai.heatmap_status || 'NOT COMPUTED'}
+                              </span>
+                              {xai.dominant_modality && (
+                                <span className={`text-[10px] px-3 py-1 rounded-lg border font-black uppercase ${xai.dominant_modality === 'image' ? 'bg-red-500/10 border-red-500/20 text-red-300' : 'bg-purple-500/10 border-purple-500/20 text-purple-300'}`}>
+                                  {xai.dominant_modality === 'image' ? '🖼 Image drove decision' : '📝 Text drove decision'}
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed">
+                              {xai.dominant_modality === 'image'
+                                ? 'Image was analyzed but no saliency map was generated for this detection.'
+                                : 'Not generated — text was the dominant signal for this verdict.'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Row 2: Explanation + Pipeline Audit */}
@@ -383,7 +450,7 @@ const XAIInsights = () => {
                       <div className="mt-6 space-y-3">
                         {/* Top text evidence */}
                         {xai.text_attributions && xai.text_attributions.length > 0 && (() => {
-                          const top = [...xai.text_attributions].sort((a,b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0,3);
+                          const top = [...xai.text_attributions].sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0, 3);
                           const forDisaster = top.filter(t => t.weight > 0);
                           const against = top.filter(t => t.weight < 0);
                           return (
