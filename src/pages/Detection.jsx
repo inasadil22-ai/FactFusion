@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { classifyVerdict, SCORE_THRESHOLDS } from '../utils/verdict';
 
-
 // ---------------------------------------------------------------------------
 // XAI Heatmap Visualizer
 // ---------------------------------------------------------------------------
@@ -49,8 +48,8 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
     img.src = originalImageSrc;
 
     img.onload = () => {
-      canvas.width = 450;
-      canvas.height = 450;
+      canvas.width = 640;
+      canvas.height = 640;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       const offscreenCanvas = document.createElement('canvas');
@@ -93,7 +92,7 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
 
   return (
     <div className="flex flex-col items-center gap-4 bg-zinc-900/40 p-4 rounded-xl border border-zinc-800">
-      <div className="relative overflow-hidden rounded-lg shadow-inner border border-zinc-700 w-[224px] h-[224px]">
+      <div className="relative overflow-hidden rounded-lg shadow-inner border border-zinc-700 w-[320px] h-[320px]">
         <canvas
           ref={canvasRef}
           className="absolute inset-0 block w-full h-full"
@@ -101,7 +100,7 @@ export const XAIVisualizer = ({ originalImageSrc, heatmapMatrix, result }) => {
         />
       </div>
 
-      <div className="w-full max-w-[224px] space-y-1">
+      <div className="w-full max-w-[320px] space-y-1">
         <div className="flex justify-between text-[10px] font-semibold uppercase tracking-widest">
           <div className="flex flex-col items-start text-zinc-500">
             <span>Low (Text)</span>
@@ -403,9 +402,6 @@ const Detection = () => {
                     ? AlertTriangle
                     : ShieldAlert;
 
-                // FIX: Read heatmap from correct backend field: xai_insights.visual_heatmap
-                const heatmapData = result?.xai_insights?.visual_heatmap;
-
                 return (
                   <div className={`p-6 rounded-[2.5rem] border-2 flex flex-col md:flex-row items-center justify-between gap-8 ${cardStyles}`}>
                     <div className="flex items-center gap-6 w-full md:w-auto">
@@ -421,18 +417,6 @@ const Detection = () => {
                         </p>
                       </div>
                     </div>
-
-                    {/* FIX: Use correct field xai_insights.visual_heatmap */}
-                    {heatmapData && heatmapData.length > 0 && previewUrl && (
-                      <div className="w-full md:w-auto flex justify-center">
-                        <XAIVisualizer
-                          originalImageSrc={previewUrl}
-                          heatmapMatrix={heatmapData}
-                          result={result}
-                        />
-                      </div>
-                    )}
-
                   </div>
                 );
               })()}
