@@ -1,6 +1,11 @@
 import os
 import datetime
 import hashlib
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from functools import wraps
+import jwt
 from bson.objectid import ObjectId
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -69,6 +74,111 @@ except Exception as e:
 
 # Initialize Bcrypt
 bcrypt = Bcrypt(app)
+
+# --- AUTH / SESSION SETUP ------------------------------------------------
+# Secret used to sign login session tokens. Set JWT_SECRET_KEY in your
+# environment (HF Space secrets / .env) for production. If it's missing we
+# fall back to a secret generated fresh each time the server starts — this
+# keeps the app from crashing on boot, but it means every existing login
+# is invalidated (users just get logged out) whenever the server restarts.
+# Set the real env var to avoid that.
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+if not JWT_SECRET_KEY:
+    JWT_SECRET_KEY = secrets.token_hex(32)
+    print("⚠️ JWT_SECRET_KEY is not set — using a temporary secret generated "
+          "for this process. Set JWT_SECRET_KEY in your environment so logins "
+          "survive a server restart.")
+
+JWT_EXPIRY_DAYS = 7
+RESET_TOKEN_EXPIRY_MINUTES = 60
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+
+
+def generate_token(user):
+    """Creates a signed, expiring session token for a logged-in user."""
+    payload = {
+        'sub': str(user['_id']),
+        'email': user['email'],
+        'role': user.get('role', 'standard'),
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=JWT_EXPIRY_DAYS)
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm='HS256')
+
+
+def decode_token(token):
+    try:
+        return jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+
+def get_bearer_token():
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        return auth_header[len('Bearer '):].strip()
+    return None
+
+
+def require_auth(f):
+    """Route decorator: rejects the request with 401 unless a valid,
+    non-expired login token is present. On success, request.current_user
+    is set to {sub, email, role} for the route to use."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        token = get_bearer_token()
+        if not token:
+            return jsonify({'error': 'Login required.'}), 401
+        payload = decode_token(token)
+        if not payload:
+            return jsonify({'error': 'Your session has expired. Please log in again.'}), 401
+        request.current_user = payload
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def get_optional_user():
+    """Best-effort read of the caller's identity from a Bearer token.
+    Returns None for guests instead of rejecting the request — used on
+    routes (like /api/v1/analyze) that work for logged-out users too, but
+    should trust a real token over anything the client claims in the body."""
+    token = get_bearer_token()
+    if not token:
+        return None
+    return decode_token(token)
+
+
+def send_email(to_email, subject, body):
+    """Sends a plain-text email via SMTP if SMTP_HOST/SMTP_USER/
+    SMTP_PASSWORD are set in the environment. If they're not configured yet
+    (e.g. local dev, or before you've wired up a mail provider), the email
+    is logged to the server console instead of sent, so the password-reset
+    flow can still be tested end-to-end — check your server logs for the
+    reset link. Set the SMTP_* env vars for this to actually deliver mail."""
+    smtp_host = os.environ.get('SMTP_HOST')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_password = os.environ.get('SMTP_PASSWORD')
+    smtp_from = os.environ.get('SMTP_FROM', smtp_user)
+
+    if not (smtp_host and smtp_user and smtp_password):
+        print(f"[✉️ DEV MODE — SMTP not configured] Would email {to_email}:")
+        print(f"    Subject: {subject}")
+        print(f"    {body}")
+        return
+
+    try:
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = smtp_from
+        msg['To'] = to_email
+        with smtplib.SMTP(smtp_host, smtp_port) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.sendmail(smtp_from, [to_email], msg.as_string())
+    except Exception as e:
+        print(f"❌ Failed to send email to {to_email}: {e}")
 
 
 try:
@@ -150,7 +260,14 @@ def analyze_content():
     try:
         text_content = request.form.get('text', '').strip()
         file = request.files.get('file')
-        user_id = request.form.get('user_id')
+
+        # Trust a logged-in user's real identity (from their token) over
+        # anything a request could claim in the form body — otherwise anyone
+        # could attribute an analysis to someone else's account by just
+        # sending a different user_id. Guests (no token) still work exactly
+        # as before, saved with no user_id.
+        current_user = get_optional_user()
+        user_id = current_user['sub'] if current_user else None
 
         filename = None
         file_path = None
@@ -205,7 +322,7 @@ def signup_user():
         return jsonify({'error': 'Database not connected. Check MONGO_URI.'}), 500
     try:
         data = request.get_json()
-        email = data.get('email')
+        email = (data.get('email') or '').strip().lower()
         incoming_password = data.get('password')
 
         if not email or not incoming_password:
@@ -218,16 +335,22 @@ def signup_user():
         new_user = {
             'email': email,
             'password_hash': hashed,
-            'role': data.get('role', 'standard'),
+            # Role is always 'standard' here — never trust a client-supplied
+            # role, or anyone could POST {"role": "admin"} to /api/signup and
+            # grant themselves access to every user's data.
+            'role': 'standard',
             'created_at': datetime.datetime.utcnow()
         }
         result = db.users.insert_one(new_user)
+        new_user['_id'] = result.inserted_id
+        token = generate_token(new_user)
         return jsonify({
             'user': {
                 'id': str(result.inserted_id),
                 'email': email,
                 'role': new_user['role']
             },
+            'token': token,
             'message': 'User created'
         }), 201
     except Exception as e:
@@ -239,7 +362,7 @@ def login_user():
         return jsonify({'error': 'Database not connected. Check MONGO_URI.'}), 500
     try:
         data = request.get_json()
-        email = data.get('email')
+        email = (data.get('email') or '').strip().lower()
         password_to_check = data.get('password')
 
         user = db.users.find_one({'email': email})
@@ -269,12 +392,14 @@ def login_user():
                 )
 
         if authenticated:
+            token = generate_token(user)
             return jsonify({
                 'user': {
                     'id': str(user['_id']),
                     'email': user['email'],
                     'role': user.get('role', 'standard')
                 },
+                'token': token,
                 'message': 'Login successful'
             }), 200
 
@@ -282,18 +407,108 @@ def login_user():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# --- PASSWORD RESET ROUTES ---
+@app.route('/api/forgot-password', methods=['POST'])
+def forgot_password():
+    if db is None:
+        return jsonify({'error': 'Database not connected. Check MONGO_URI.'}), 500
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+
+        if not email:
+            return jsonify({'error': 'Please enter your email.'}), 400
+
+        user = db.users.find_one({'email': email})
+        if user:
+            raw_token = secrets.token_urlsafe(32)
+            # Store only a hash of the token, never the raw value — same
+            # principle as password_hash. Anyone reading the DB can't reuse it.
+            token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+            expires = datetime.datetime.utcnow() + datetime.timedelta(minutes=RESET_TOKEN_EXPIRY_MINUTES)
+
+            db.users.update_one(
+                {'_id': user['_id']},
+                {'$set': {'reset_token_hash': token_hash, 'reset_token_expires': expires}}
+            )
+
+            reset_link = f"{FRONTEND_URL}/reset-password?token={raw_token}"
+            send_email(
+                to_email=email,
+                subject="Reset your FactFusion password",
+                body=(
+                    "We received a request to reset your FactFusion password.\n\n"
+                    f"Reset it here (this link expires in {RESET_TOKEN_EXPIRY_MINUTES} minutes):\n"
+                    f"{reset_link}\n\n"
+                    "If you didn't request this, you can safely ignore this email."
+                )
+            )
+
+        # Always return the same response whether or not that email is
+        # registered — otherwise this endpoint could be used to check which
+        # emails have accounts.
+        return jsonify({'message': 'If an account exists for that email, a reset link has been sent.'}), 200
+    except Exception as e:
+        return jsonify({'error': 'Something went wrong. Please try again.'}), 500
+
+@app.route('/api/reset-password', methods=['POST'])
+def reset_password():
+    if db is None:
+        return jsonify({'error': 'Database not connected. Check MONGO_URI.'}), 500
+    try:
+        data = request.get_json() or {}
+        raw_token = data.get('token')
+        new_password = data.get('password')
+
+        if not raw_token:
+            return jsonify({'error': 'This reset link is invalid or has expired. Please request a new one.'}), 400
+        if not new_password or len(new_password) < 6:
+            return jsonify({'error': 'Access key must be at least 6 characters.'}), 400
+
+        token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+        user = db.users.find_one({
+            'reset_token_hash': token_hash,
+            'reset_token_expires': {'$gt': datetime.datetime.utcnow()}
+        })
+
+        if not user:
+            return jsonify({'error': 'This reset link is invalid or has expired. Please request a new one.'}), 400
+
+        new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        db.users.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {'password_hash': new_hash},
+                '$unset': {'reset_token_hash': '', 'reset_token_expires': ''}
+            }
+        )
+
+        return jsonify({'message': 'Password updated. You can now log in.'}), 200
+    except Exception as e:
+        return jsonify({'error': 'Something went wrong. Please try again.'}), 500
+
 # --- HISTORY ROUTES ---
 @app.route('/api/v1/analysis-history', methods=['GET'])
+@require_auth
 def list_analysis_history():
     if db is None:
         return jsonify({'error': 'Database not connected'}), 500
     try:
-        user_id = request.args.get('user_id')
         limit = min(int(request.args.get('limit', 20)), 50)  # default 20, hard cap 50
 
-        query = {}
-        if user_id:
-            query["user_id"] = user_id
+        is_admin = request.current_user.get('role') == 'admin'
+        requested_user_id = request.args.get('user_id')
+
+        if is_admin:
+            # Admins may optionally filter to one user's history; omitting
+            # user_id returns everyone's — intentional, admin-only.
+            query = {"user_id": requested_user_id} if requested_user_id else {}
+        else:
+            # Everyone else can only ever see their own history, no matter
+            # what (if anything) they pass as user_id — previously this was
+            # trusted from the query string, which meant a plain GET with no
+            # user_id at all returned every user's records.
+            query = {"user_id": request.current_user['sub']}
 
         # Exclude heavy heatmap matrix — only needed on XAI page for a single record
         projection = {'xai_insights.visual_heatmap': 0}
@@ -305,8 +520,19 @@ def list_analysis_history():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/v1/analysis-history/<id>', methods=['DELETE'])
+@require_auth
 def delete_analysis_record(id):
+    if db is None:
+        return jsonify({'error': 'Database not connected'}), 500
     try:
+        record = db.analysis.find_one({'_id': ObjectId(id)})
+        if not record:
+            return jsonify({'error': 'Not found'}), 404
+
+        is_admin = request.current_user.get('role') == 'admin'
+        if not is_admin and record.get('user_id') != request.current_user['sub']:
+            return jsonify({'error': "You don't have permission to delete this record."}), 403
+
         result = db.analysis.delete_one({'_id': ObjectId(id)})
         if result.deleted_count > 0:
             return jsonify({'message': 'Deleted'}), 200
@@ -315,6 +541,7 @@ def delete_analysis_record(id):
         return jsonify({'error': 'Invalid ID format'}), 400
 
 @app.route('/api/v1/analysis-history/record/<id>', methods=['GET'])
+@require_auth
 def get_single_analysis(id):
     """
     Fetch a single analysis record WITH heatmap included.
@@ -327,6 +554,11 @@ def get_single_analysis(id):
         record = db.analysis.find_one({'_id': ObjectId(id)})
         if not record:
             return jsonify({'error': 'Record not found'}), 404
+
+        is_admin = request.current_user.get('role') == 'admin'
+        if not is_admin and record.get('user_id') != request.current_user['sub']:
+            return jsonify({'error': "You don't have permission to view this record."}), 403
+
         return jsonify(clean_mongo_record(record)), 200
     except Exception as e:
         return jsonify({'error': 'Invalid ID format'}), 400

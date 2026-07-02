@@ -31,23 +31,27 @@ const Login = () => {
 
   useEffect(() => {
     setError('');
-    setEmail('');
     setPassword('');
     setConfirmPassword('');
   }, [isLogin]);
 
   const validateForm = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       setError("Credentials required for uplink.");
       return false;
     }
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(trimmedEmail)) {
       setError("Invalid identity format.");
       return false;
     }
     if (password.length < 6) {
       setError("Access key must be at least 6 characters.");
+      return false;
+    }
+    if (!isLogin && !confirmPassword) {
+      setError("Please confirm your access key.");
       return false;
     }
     if (!isLogin && password !== confirmPassword) {
@@ -69,9 +73,10 @@ const Login = () => {
       // Send plain password over HTTPS — backend (bcrypt) handles secure hashing.
       // Client-side SHA256 was removed: it added no real security (no salt) and
       // caused a double-hash mismatch with the server's bcrypt comparison.
+      const trimmedEmail = email.trim();
       const payload = isLogin
-        ? { email, password }
-        : { email, password, role: 'standard' };
+        ? { email: trimmedEmail, password }
+        : { email: trimmedEmail, password, role: 'standard' };
 
       const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
 
@@ -178,6 +183,17 @@ const Login = () => {
                   placeholder="••••••••"
                 />
               </div>
+              {isLogin && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/forgot-password')}
+                    className="text-[10px] font-bold text-blue-400/50 hover:text-blue-400 uppercase tracking-widest transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
             </div>
 
             <AnimatePresence mode="wait">

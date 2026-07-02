@@ -220,8 +220,12 @@ const Detection = () => {
 
     try {
       const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://inas-00-factfusion-backend.hf.space';
+      const accessToken = localStorage.getItem('accessToken');
       const response = await axios.post(`${apiBase}/api/v1/analyze`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
       });
 
       setResult({

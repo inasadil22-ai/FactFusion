@@ -11,6 +11,11 @@ import { XAIVisualizer } from './Detection';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
 
+const authHeaders = () => {
+  const token = localStorage.getItem('accessToken');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 const XAIInsights = () => {
   const [searchParams] = useSearchParams();
   const scanId = searchParams.get('id');
@@ -25,23 +30,16 @@ const XAIInsights = () => {
   const [loading, setLoading] = useState(!incomingResult);
   const [selectedIdx, setSelectedIdx] = useState(incomingResult ? 0 : null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  // The history endpoint now requires login. If we have no incomingResult to
+  // fall back on and the fetch comes back 401, show an accurate "please log
+  // in" message instead of the generic "No Analyses Yet" empty state.
+  const [authRequired, setAuthRequired] = useState(false);
 
   useEffect(() => {
     const fetchRecords = async () => {
       try {
-        const userString = localStorage.getItem('user');
         let url = `${API_BASE}/api/v1/analysis-history`;
-        if (userString) {
-          try {
-            const user = JSON.parse(userString);
-            if (user && user.id && user.role !== 'admin') {
-              url += `?user_id=${user.id}`;
-            }
-          } catch (e) {
-            console.error("Error parsing user for XAI query:", e);
-          }
-        }
-        const res = await axios.get(url);
+        const res = await axios.get(url, { headers: authHeaders() });
         const data = Array.isArray(res.data) ? res.data : [];
         // Only keep records that have xai_insights
         const withXai = data.filter(r => r.xai_insights);
@@ -71,6 +69,9 @@ const XAIInsights = () => {
         }
       } catch (err) {
         console.error('Failed to fetch analysis history:', err);
+        if (err.response?.status === 401 && !incomingResult) {
+          setAuthRequired(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -93,7 +94,7 @@ const XAIInsights = () => {
     }
     let cancelled = false;
     setDetailLoading(true);
-    axios.get(`${API_BASE}/api/v1/analysis-history/record/${listSelected.id}`)
+    axios.get(`${API_BASE}/api/v1/analysis-history/record/${listSelected.id}`, { headers: authHeaders() })
       .then(res => { if (!cancelled) setDetailRecord(res.data); })
       .catch(err => {
         console.error('Failed to fetch full XAI record (heatmap):', err);
@@ -196,16 +197,33 @@ const XAIInsights = () => {
             <div className="w-24 h-24 rounded-[2rem] bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-8">
               <Fingerprint size={40} className="text-blue-400/40" />
             </div>
-            <h3 className="text-2xl font-black mb-3 tracking-tight">No Analyses Yet</h3>
-            <p className="text-white/40 max-w-md mb-8 font-medium">
-              Run your first detection to generate XAI evidence. Token attributions, heatmaps, and audit trails will appear here.
-            </p>
-            <Link
-              to="/detection"
-              className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-sm hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95 transition-all duration-300"
-            >
-              Go to Detection <ArrowRight size={16} />
-            </Link>
+            {authRequired ? (
+              <>
+                <h3 className="text-2xl font-black mb-3 tracking-tight">Login Required</h3>
+                <p className="text-white/40 max-w-md mb-8 font-medium">
+                  Your analysis history is tied to your account. Log in to view your past detections and XAI evidence.
+                </p>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-sm hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95 transition-all duration-300"
+                >
+                  Go to Login <ArrowRight size={16} />
+                </Link>
+              </>
+            ) : (
+              <>
+                <h3 className="text-2xl font-black mb-3 tracking-tight">No Analyses Yet</h3>
+                <p className="text-white/40 max-w-md mb-8 font-medium">
+                  Run your first detection to generate XAI evidence. Token attributions, heatmaps, and audit trails will appear here.
+                </p>
+                <Link
+                  to="/detection"
+                  className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-sm hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95 transition-all duration-300"
+                >
+                  Go to Detection <ArrowRight size={16} />
+                </Link>
+              </>
+            )}
           </motion.div>
         )}
 
