@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -14,9 +14,16 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
 const XAIInsights = () => {
   const [searchParams] = useSearchParams();
   const scanId = searchParams.get('id');
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedIdx, setSelectedIdx] = useState(null);
+  const location = useLocation();
+  // FIX: Detection.jsx navigates here with `state: { result, previewUrl }` —
+  // that result is the detection the user just ran and wants to inspect.
+  // Previously this state was never read, so the page always fell back to
+  // "please select an analysis from the dropdown" instead of showing it.
+  const incomingResult = location.state?.result || null;
+
+  const [records, setRecords] = useState(incomingResult ? [incomingResult] : []);
+  const [loading, setLoading] = useState(!incomingResult);
+  const [selectedIdx, setSelectedIdx] = useState(incomingResult ? 0 : null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
@@ -38,12 +45,28 @@ const XAIInsights = () => {
         const data = Array.isArray(res.data) ? res.data : [];
         // Only keep records that have xai_insights
         const withXai = data.filter(r => r.xai_insights);
-        setRecords(withXai);
 
-        if (scanId && withXai.length > 0) {
-          const idx = withXai.findIndex(r => r.id === scanId);
-          if (idx !== -1) {
-            setSelectedIdx(idx);
+        if (incomingResult) {
+          // We already have the just-run detection in hand (passed via router
+          // state). If the history endpoint has since picked it up, prefer
+          // that (fully-formed) version and select it; otherwise keep our
+          // local copy pinned at the top so it's visible immediately instead
+          // of forcing the user to pick something from the dropdown.
+          const matchIdx = withXai.findIndex(r => r.id && r.id === incomingResult.id);
+          if (matchIdx !== -1) {
+            setRecords(withXai);
+            setSelectedIdx(matchIdx);
+          } else {
+            setRecords([incomingResult, ...withXai]);
+            setSelectedIdx(0);
+          }
+        } else {
+          setRecords(withXai);
+          if (scanId && withXai.length > 0) {
+            const idx = withXai.findIndex(r => r.id === scanId);
+            if (idx !== -1) {
+              setSelectedIdx(idx);
+            }
           }
         }
       } catch (err) {
@@ -53,6 +76,7 @@ const XAIInsights = () => {
       }
     };
     fetchRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanId]);
 
   // The list endpoint deliberately omits xai_insights.visual_heatmap for performance.

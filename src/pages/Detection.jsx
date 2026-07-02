@@ -606,9 +606,12 @@ const Detection = () => {
                     </p>
                   </div>
                 </div>
-                {/* FIX: Pass full result via state instead of undefined result.id */}
+                {/* FIX: Pass full result via state (so XAIInsights can show it
+                    immediately without waiting on a history re-fetch), and also
+                    include the id as a query param when available so the URL is
+                    shareable/bookmarkable and matches XAIInsights' ?id= handling. */}
                 <button
-                  onClick={() => navigate('/xai', { state: { result, previewUrl } })}
+                  onClick={() => navigate(result?.id ? `/xai?id=${result.id}` : '/xai', { state: { result, previewUrl } })}
                   className="px-10 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-900/40 hover:-translate-y-1"
                 >
                   Explore XAI Evidence
