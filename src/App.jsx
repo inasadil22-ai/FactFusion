@@ -11,12 +11,15 @@ import Detection from './pages/Detection';
 import XAIInsights from './pages/XAIInsights';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import ForgotPassword from './pages/Forgotpassword';
+import ResetPassword from './pages/Resetpassword';
 // Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Hero from './components/Hero';
 
 import ProtectedRoute from './utils/ProtectedRoute';
+
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
