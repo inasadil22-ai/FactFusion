@@ -283,89 +283,92 @@ const XAIInsights = () => {
                 >
 
                   {/* Row 1: Text Attributions + Visual Heatmap */}
-                  <div className={`grid gap-8 ${hasImage ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+                  <div className={`grid gap-8 ${hasText && hasImage ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
 
-                    {/* Text Attributions Card */}
-                    <div className="flex flex-col p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-blue-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(59,130,246,0.05)] transition-all duration-300">
-                      <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-xl font-black text-white flex items-center gap-3 uppercase tracking-tight">
-                          <MessageSquare size={24} className="text-blue-400" /> Textual Attention
-                        </h2>
-                        <Cpu size={20} className="text-blue-500/40" />
-                      </div>
+                    {/* Text Attributions Card — only for detections that actually
+                        included text. Previously unconditional, so image-only
+                        detections still showed an empty "No Text Attributions
+                        Available" card. */}
+                    {hasText && (
+                      <div className="flex flex-col p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl hover:border-blue-500/20 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(59,130,246,0.05)] transition-all duration-300">
+                        <div className="flex items-center justify-between mb-8">
+                          <h2 className="text-xl font-black text-white flex items-center gap-3 uppercase tracking-tight">
+                            <MessageSquare size={24} className="text-blue-400" /> Textual Attention
+                          </h2>
+                          <Cpu size={20} className="text-blue-500/40" />
+                        </div>
 
-                      <div className="flex-1">
+                        <div className="flex-1">
 
-                        {/* ── SHAP Token Bar Chart ─────────────────────────── */}
-                        {xai.text_attributions && xai.text_attributions.length > 0 ? (() => {
-                          const maxW = Math.max(...xai.text_attributions.map(a => Math.abs(a.weight)), 0.001);
-                          const hasNeg = xai.text_attributions.some(a => a.weight < 0);
-                          return (
-                            <div className="mb-8">
-                              <div className="flex items-center justify-between mb-3">
-                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
-                                  SHAP Token Attribution
-                                </p>
-                                <div className="flex gap-3 text-[9px] font-bold uppercase">
-                                  <span className="flex items-center gap-1 text-red-400"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block" />Disaster signal</span>
-                                  {hasNeg && <span className="flex items-center gap-1 text-blue-400"><span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" />Against</span>}
+                          {/* ── SHAP Token Bar Chart ─────────────────────────── */}
+                          {xai.text_attributions && xai.text_attributions.length > 0 ? (() => {
+                            const maxW = Math.max(...xai.text_attributions.map(a => Math.abs(a.weight)), 0.001);
+                            const hasNeg = xai.text_attributions.some(a => a.weight < 0);
+                            return (
+                              <div className="mb-8">
+                                <div className="flex items-center justify-between mb-3">
+                                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                                    SHAP Token Attribution
+                                  </p>
+                                  <div className="flex gap-3 text-[9px] font-bold uppercase">
+                                    <span className="flex items-center gap-1 text-red-400"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block" />Disaster signal</span>
+                                    {hasNeg && <span className="flex items-center gap-1 text-blue-400"><span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" />Against</span>}
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="space-y-2">
-                                {xai.text_attributions.map((attr, idx) => {
-                                  const pct = (Math.abs(attr.weight) / maxW) * 100;
-                                  const isPos = attr.weight >= 0;
-                                  return (
-                                    <div key={idx} className="flex items-center gap-3">
-                                      <span className="w-20 text-right text-xs font-bold text-white/80 shrink-0 truncate">{attr.token}</span>
-                                      <div className="flex-1 h-5 bg-white/5 rounded overflow-hidden">
-                                        <div
-                                          className={`h-full rounded transition-all duration-500 ${isPos ? 'bg-red-500' : 'bg-blue-500'}`}
-                                          style={{ width: `${pct}%`, opacity: 0.85 }}
-                                        />
+                                <div className="space-y-2">
+                                  {xai.text_attributions.map((attr, idx) => {
+                                    const pct = (Math.abs(attr.weight) / maxW) * 100;
+                                    const isPos = attr.weight >= 0;
+                                    return (
+                                      <div key={idx} className="flex items-center gap-3">
+                                        <span className="w-20 text-right text-xs font-bold text-white/80 shrink-0 truncate">{attr.token}</span>
+                                        <div className="flex-1 h-5 bg-white/5 rounded overflow-hidden">
+                                          <div
+                                            className={`h-full rounded transition-all duration-500 ${isPos ? 'bg-red-500' : 'bg-blue-500'}`}
+                                            style={{ width: `${pct}%`, opacity: 0.85 }}
+                                          />
+                                        </div>
+                                        <span className={`w-14 text-xs font-mono font-bold shrink-0 ${isPos ? 'text-red-400' : 'text-blue-400'}`}>
+                                          {isPos ? '+' : ''}{attr.weight.toFixed(3)}
+                                        </span>
                                       </div>
-                                      <span className={`w-14 text-xs font-mono font-bold shrink-0 ${isPos ? 'text-red-400' : 'text-blue-400'}`}>
-                                        {isPos ? '+' : ''}{attr.weight.toFixed(3)}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
+                                </div>
+                                <p className="text-[9px] text-white/30 mt-3">
+                                  Red = pushes toward disaster · Blue = pushes against · Length = relative importance
+                                </p>
                               </div>
-                              <p className="text-[9px] text-white/30 mt-3">
-                                Red = pushes toward disaster · Blue = pushes against · Length = relative importance
-                              </p>
+                            );
+                          })() : xai.text_weights && xai.text_weights.length > 0 ? (
+                            <div className="mb-8">
+                              <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Keyword Signals</p>
+                              <div className="flex flex-wrap gap-2">
+                                {xai.text_weights.map((word, i) => (
+                                  <span key={i} className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs uppercase font-bold text-blue-300">
+                                    {word}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          );
-                        })() : xai.text_weights && xai.text_weights.length > 0 ? (
-                          <div className="mb-8">
-                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Keyword Signals</p>
-                            <div className="flex flex-wrap gap-2">
-                              {xai.text_weights.map((word, i) => (
-                                <span key={i} className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs uppercase font-bold text-blue-300">
-                                  {word}
-                                </span>
-                              ))}
+                          ) : (
+                            <div className="mb-8 p-6 bg-black/40 rounded-[2rem] border border-white/5 flex items-center justify-center h-28">
+                              <span className="text-xs font-black text-white/20 uppercase tracking-widest">No Text Attributions Available</span>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="mb-8 p-6 bg-black/40 rounded-[2rem] border border-white/5 flex items-center justify-center h-28">
-                            <span className="text-xs font-black text-white/20 uppercase tracking-widest">No Text Attributions Available</span>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Source Text Preview */}
-                        {hasText && (
+                          {/* Source Text Preview */}
                           <div className="p-6 bg-black/40 rounded-[2rem] border border-white/5 font-mono text-sm leading-relaxed relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-[1px] bg-blue-500/40 animate-[scan_4s_linear_infinite]" />
                             <p className="text-blue-100/60 italic line-clamp-3">"{selected.text_snippet}"</p>
                           </div>
-                        )}
 
-                        <p className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed mt-6">
-                          Transformer Weights • Token Risk Analysis • Sentiment Mapping
-                        </p>
+                          <p className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed mt-6">
+                            Transformer Weights • Token Risk Analysis • Sentiment Mapping
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Visual Heatmap Card */}
                     {hasHeatmap && (
